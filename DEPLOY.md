@@ -73,14 +73,36 @@ number can change between versions.
 
 ## Deploying to Cloudflare Pages
 
+Two ways to do this. They are separate project types in Cloudflare — you cannot
+switch an existing project from one to the other later, only create a new one.
+
+### Option A — direct upload (what this project started with)
+
 1. Sign in at <https://dash.cloudflare.com> and go to **Workers & Pages → Create → Pages → Upload assets**.
-2. Give the project a name, then drag this entire folder in. There is no build
-   command and no framework preset to choose.
+2. Run `node build.mjs` locally, then drag the `dist/` folder in.
 3. Deploy. You get a `https://<project>.pages.dev` URL straight away.
 
-To update later, drag the folder in again and create a new deployment.
+To update later: run `node build.mjs` again, drag `dist/` in again, deploy again.
+Simple, but manual every time.
 
-Netlify works identically (`https://app.netlify.com/drop`) and reads the same
+### Option B — connected to GitHub (recommended once the repo exists)
+
+1. **Workers & Pages → Create → Pages → Connect to Git**, pick this repo, branch `main`.
+2. Framework preset: **None**. Build command: `node build.mjs`. Build output
+   directory: `dist`.
+3. Deploy. Every `git push` to `main` now redeploys automatically — no manual
+   drag-and-drop step. `build.mjs` needs no `npm install`; it only touches the
+   filesystem, so the default Node version in Cloudflare's build image is fine.
+
+Cloudflare cannot convert an *existing* direct-upload project to this in place.
+To switch without breaking a link you already gave someone: create the new
+Git-connected project first (it gets a different `*.pages.dev` name since the
+old one is taken), confirm it works, **then** delete the old project and rename
+the new one to the old project's exact name in its settings. That reclaims the
+same subdomain, so any link already sent out keeps working unchanged.
+
+Netlify works identically (`https://app.netlify.com/drop`, or its Git-connected
+mode with the same build command/output settings) and reads the same
 `_headers` and `_redirects` files. **GitHub Pages will not work well here** — it
 cannot set custom response headers, so the fast video core stays unavailable.
 
