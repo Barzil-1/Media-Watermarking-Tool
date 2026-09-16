@@ -63,3 +63,4 @@ Vanilla JavaScript, HTML5 Canvas, [`ffmpeg.wasm`](https://github.com/ffmpegwasm/
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
