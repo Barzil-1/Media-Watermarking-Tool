@@ -296,6 +296,23 @@ body.dropping .drop-cover{display:flex}
         </div>
         <button class="btn quiet" id="resetPos" type="button" disabled>Use the shared position for this image</button>
       </div>
+
+      <div class="field" id="motionField" hidden>
+        <label class="field-label" for="motion">Moving watermark</label>
+        <select id="motion" data-key="motion">
+          <option value="none">Off &mdash; stays in place</option>
+          <option value="top-bottom">Top to bottom</option>
+          <option value="bottom-top">Bottom to top</option>
+          <option value="left-right">Left to right</option>
+          <option value="right-left">Right to left</option>
+        </select>
+        <p class="hint">Video only. It slides across the frame and off the far edge on a loop &mdash; harder to crop or paint out than a fixed watermark. Drag the preview to choose which line it travels along.</p>
+      </div>
+      <div class="field" id="motionSpeedField" hidden>
+        <label class="field-label" for="motionSpeed">Speed <output data-for="motionSpeed"></output></label>
+        <input type="range" id="motionSpeed" data-key="motionSpeed" min="2" max="20" step="0.5">
+        <p class="hint">Seconds for one full crossing.</p>
+      </div>
     </section>
 
     <section>
@@ -409,6 +426,8 @@ body.dropping .drop-cover{display:flex}
     format: "original",
     quality: 92,
     videoMax: "original",
+    motion: "none",
+    motionSpeed: 6,
     suffix: "_wm"
   };
   let S = { ...DEFAULTS };
@@ -451,6 +470,7 @@ body.dropping .drop-cover{display:flex}
     qualityField: $("#qualityField"), nameExample: $("#nameExample"), stageTip: $("#stageTip"),
     job: $("#job"), cancel: $("#cancelBtn"), scrub: $("#scrub"), scrubRange: $("#scrubRange"),
     scrubTime: $("#scrubTime"), videoField: $("#videoField"),
+    motionField: $("#motionField"), motionSpeedField: $("#motionSpeedField"),
     working: $("#working"), workTitle: $("#workTitle"), workPct: $("#workPct"),
     workBar: $("#workBar"), workSub: $("#workSub"), workOverall: $("#workOverall"),
     workOverallText: $("#workOverallText"), workOverallBar: $("#workOverallBar"),
@@ -647,17 +667,51 @@ body.dropping .drop-cover{display:flex}
     if (S.perImage && item && item.pos) return item.pos;
     return { anchor: S.anchor, cx: S.cx, cy: S.cy };
   }
+  function rotatedBBox(w, h, rotationDeg) {
+    const a = (rotationDeg * Math.PI) / 180;
+    return {
+      bw: Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a)),
+      bh: Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))
+    };
+  }
   function placement(w, h, W, H, base, pos) {
     if (pos.anchor === "custom") return { x: pos.cx * W, y: pos.cy * H };
-    const a = (S.rotation * Math.PI) / 180;
-    const bw = Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a));
-    const bh = Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a));
+    const { bw, bh } = rotatedBBox(w, h, S.rotation);
     const m = (base * S.margin) / 100;
     const x = { l: m + bw / 2, c: W / 2, r: W - m - bw / 2 }[pos.anchor[1]];
     const y = { t: m + bh / 2, m: H / 2, b: H - m - bh / 2 }[pos.anchor[0]];
     return { x, y };
   }
-  function drawWatermark(ctx, W, H, pos) {
+
+  /* ---------- Moving watermark (video only) ----------
+     The watermark keeps its normal size, rotation and styling; only its
+     position changes over time. One axis sweeps edge-to-edge and fully off
+     both sides on a continuous loop; the other axis stays fixed, taken from
+     a dragged custom position if there is one, otherwise centered. This same
+     formula drives the live preview (in JS, right here) and the exported
+     video (translated into an ffmpeg expression in buildMotionFilter), so
+     what he sees while scrubbing matches what actually gets encoded. */
+  function motionLane(pos) {
+    return pos && pos.anchor === "custom" ? pos : { cx: 0.5, cy: 0.5 };
+  }
+  function motionProgress(t, period) {
+    const p = period > 0 ? period : 1;
+    return (((t % p) + p) % p) / p;
+  }
+  function motionXY(dir, t, W, H, w, h, pos) {
+    const { bw, bh } = rotatedBBox(w, h, S.rotation);
+    const lane = motionLane(pos);
+    const prog = motionProgress(t, S.motionSpeed);
+    if (dir === "top-bottom" || dir === "bottom-top") {
+      const span = H + bh * 2;
+      const y = dir === "top-bottom" ? -bh / 2 + span * prog : H + bh / 2 - span * prog;
+      return { x: lane.cx * W, y };
+    }
+    const span = W + bw * 2;
+    const x = dir === "left-right" ? -bw / 2 + span * prog : W + bw / 2 - span * prog;
+    return { x, y: lane.cy * H };
+  }
+  function drawWatermark(ctx, W, H, pos, t) {
     const lines = getLines();
     if (!lines.length) return;
     const base = Math.min(W, H);
@@ -668,7 +722,9 @@ body.dropping .drop-cover{display:flex}
       style.drawFull(ctx, lines, base, W, H);
     } else {
       const L = style.layout(ctx, lines, base);
-      const p = placement(L.w, L.h, W, H, base, pos);
+      const p = t != null && S.motion !== "none"
+        ? motionXY(S.motion, t, W, H, L.w, L.h, pos)
+        : placement(L.w, L.h, W, H, base, pos);
       ctx.translate(p.x, p.y);
       ctx.rotate((S.rotation * Math.PI) / 180);
       style.draw(ctx, L);
@@ -698,7 +754,8 @@ body.dropping .drop-cover{display:flex}
     if (preview.height !== H) preview.height = H;
     pctx.clearRect(0, 0, W, H);
     try { pctx.drawImage(src, 0, 0, W, H); } catch (e) { return; }
-    drawWatermark(pctx, W, H, effectivePos(it));
+    const t = it.kind === "video" ? it.time : undefined;
+    drawWatermark(pctx, W, H, effectivePos(it), t);
   }
 
   /* ---------- Files ---------- */
@@ -997,7 +1054,11 @@ body.dropping .drop-cover{display:flex}
     els.bgLabel.textContent = style.bgName;
     els.outlineLabel.textContent = style.outlineName;
     els.qualityField.hidden = S.format === "image/png";
-    els.videoField.hidden = !items.some((x) => x.kind === "video");
+    const hasVideo = items.some((x) => x.kind === "video");
+    els.videoField.hidden = !hasVideo;
+    const motionOK = !tiled && hasVideo;
+    els.motionField.hidden = !motionOK;
+    els.motionSpeedField.hidden = !motionOK || S.motion === "none";
     const pos = effectivePos(items[current]);
     [...els.posgrid.children].forEach((b) => b.classList.toggle("on", b.dataset.anchor === pos.anchor));
     [...els.posgrid.children].forEach((b) => b.setAttribute("aria-pressed", b.dataset.anchor === pos.anchor ? "true" : "false"));
@@ -1019,7 +1080,8 @@ body.dropping .drop-cover{display:flex}
   function updateOutputs() {
     const fmt = {
       size: (v) => `${v}%`, opacity: (v) => `${v}%`, rotation: (v) => `${v}\u00B0`,
-      margin: (v) => `${v}%`, lineHeight: (v) => Number(v).toFixed(2), quality: (v) => `${v}%`, gap: (v) => `${v}%`
+      margin: (v) => `${v}%`, lineHeight: (v) => Number(v).toFixed(2), quality: (v) => `${v}%`, gap: (v) => `${v}%`,
+      motionSpeed: (v) => `${Number(v).toFixed(1)}s`
     };
     document.querySelectorAll("output[data-for]").forEach((o) => {
       const k = o.dataset.for;
@@ -1045,7 +1107,7 @@ body.dropping .drop-cover{display:flex}
     else if (el.type === "range") S[k] = parseFloat(el.value);
     else S[k] = el.value;
     updateOutputs();
-    if (["style", "perImage", "format"].includes(k)) { updatePosUI(); renderStrip(); }
+    if (["style", "perImage", "format", "motion"].includes(k)) { updatePosUI(); renderStrip(); }
     if (["format", "suffix"].includes(k)) updateBar();
     if (["font", "bold", "text", "uppercase"].includes(k)) ensureFont().then(scheduleRender);
     scheduleRender();
@@ -1318,10 +1380,74 @@ body.dropping .drop-cover{display:flex}
     return new Uint8Array(await blob.arrayBuffer());
   }
 
+  /* For a moving watermark, ffmpeg needs to slide a small sprite across the
+     frame rather than composite one fixed full-frame image. This renders just
+     the watermark's own graphic, tightly cropped to its rotated bounding box
+     (no placement baked in) - drawWatermark() isn't reused here since it
+     always positions onto a full frame; this mirrors just its drawing half. */
+  async function watermarkSpritePNG(it, W, H) {
+    await ensureFont();
+    const lines = getLines();
+    const base = Math.min(W, H);
+    const style = STYLES[S.style] || STYLES.badge;
+    const probe = document.createElement("canvas").getContext("2d");
+    const L = style.layout(probe, lines, base);
+    const { bw, bh } = rotatedBBox(L.w, L.h, S.rotation);
+    const pad = Math.ceil(base * 0.02) + 8;
+    const cw = Math.max(2, Math.ceil(bw) + pad * 2);
+    const ch = Math.max(2, Math.ceil(bh) + pad * 2);
+    const c = document.createElement("canvas");
+    c.width = cw;
+    c.height = ch;
+    const ctx = c.getContext("2d");
+    ctx.save();
+    ctx.globalAlpha = S.opacity / 100;
+    ctx.translate(cw / 2, ch / 2);
+    ctx.rotate((S.rotation * Math.PI) / 180);
+    style.draw(ctx, L);
+    ctx.restore();
+    const blob = await new Promise((res, rej) =>
+      c.toBlob((b) => (b ? res(b) : rej(new Error("png"))), "image/png")
+    );
+    c.width = 0;
+    c.height = 0;
+    return { data: new Uint8Array(await blob.arrayBuffer()), w: cw, h: ch };
+  }
+
+  /* Builds the ffmpeg filter graph for a moving watermark: the sprite slides
+     across the frame and off both edges, on a continuous loop, for the whole
+     video regardless of length. The only value ffmpeg fills in at encode time
+     is 't' (the current output timestamp) - everything else (sizes, lane,
+     period) is a plain number computed here in JS, so there's no dependency
+     on ffmpeg's own W/H/main_w-style variable names. Wrapping the whole
+     expression in single quotes is what lets the commas inside mod(...) go
+     unescaped - ffmpeg's filtergraph parser only treats , and : as chain
+     syntax outside of quotes. */
+  function buildMotionFilter(W, H, sw, sh, dir, period, pos) {
+    const lane = motionLane(pos);
+    const laneX = Math.round(lane.cx * W - sw / 2);
+    const laneY = Math.round(lane.cy * H - sh / 2);
+    const p = Math.max(0.5, period);
+    const prog = `mod(t,${p})/${p}`;
+    let x, y;
+    if (dir === "top-bottom" || dir === "bottom-top") {
+      x = String(laneX);
+      const span = H + sh * 2;
+      y = dir === "top-bottom" ? `-${sh}+${span}*(${prog})` : `${H + sh}-${span}*(${prog})`;
+    } else {
+      y = String(laneY);
+      const span = W + sw * 2;
+      x = dir === "left-right" ? `-${sw}+${span}*(${prog})` : `${W + sw}-${span}*(${prog})`;
+    }
+    return `[0:v]scale=${W}:${H}:flags=bicubic[s];[s][1:v]overlay=x='${x}':y='${y}':format=auto,format=yuv420p[v]`;
+  }
+
   async function renderVideo(it, onProgress, ticketRef) {
     const engine = await ensureEngine();
     const { w: W, h: H } = targetDims(it);
-    const png = await watermarkPNG(it, W, H);
+    const moving = S.motion !== "none" && S.style !== "tiled" && getLines().length > 0;
+    const sprite = moving ? await watermarkSpritePNG(it, W, H) : null;
+    const png = moving ? null : await watermarkPNG(it, W, H);
     const m = /\.[a-z0-9]+$/i.exec(it.name);
     const inName = "input" + (m ? m[0].toLowerCase() : ".mp4");
     const dur = it.duration || 0;
@@ -1338,8 +1464,10 @@ body.dropping .drop-cover{display:flex}
     engine.on("progress", onProg);
     try {
       await engine.writeFile(inName, new Uint8Array(await it.file.arrayBuffer()));
-      await engine.writeFile("wm.png", png);
-      const filter = `[0:v]scale=${W}:${H}:flags=bicubic[s];[s][1:v]overlay=0:0:format=auto,format=yuv420p[v]`;
+      await engine.writeFile("wm.png", moving ? sprite.data : png);
+      const filter = moving
+        ? buildMotionFilter(W, H, sprite.w, sprite.h, S.motion, S.motionSpeed, effectivePos(it))
+        : `[0:v]scale=${W}:${H}:flags=bicubic[s];[s][1:v]overlay=0:0:format=auto,format=yuv420p[v]`;
       const args = ["-i", inName, "-i", "wm.png", "-filter_complex", filter,
         "-map", "[v]", "-map", "0:a?",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",

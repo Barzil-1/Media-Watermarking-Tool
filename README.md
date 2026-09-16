@@ -17,6 +17,7 @@ Watermarking a handful of files by hand is fine. Watermarking dozens of them, co
 - **Four watermark styles** (round badge, plain text, rounded label, tiled) with full control over font, color, opacity, rotation, and spacing
 - **Photo export** to JPG, PNG, or WebP
 - **Video export** to MP4 (H.264), with audio preserved and no re-encode where possible
+- **Moving watermark** (video only): slides across the frame and off the far edge on a continuous loop, in any of the four cardinal directions, at an adjustable speed. Harder to crop or paint out than a fixed watermark
 - **Progress and cancel** for long video jobs, per file and overall
 - **Smart downloads**: a ZIP for small batches, straight-to-folder saving for large ones, so a big video batch can't crash the tab
 - **Installable** as a lightweight app (PWA): pin it to the taskbar, works offline after first load
