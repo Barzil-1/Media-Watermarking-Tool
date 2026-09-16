@@ -1,0 +1,14 @@
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+# The two Cross-Origin-* lines are what make SharedArrayBuffer available, which
+# is what lets the tool use the fast multi-threaded video core. Remove them and
+# everything still works, just roughly two to three times slower per video.
+#
+# They also mean every cross-origin file has to be fetched with CORS. That is
+# already handled in the page: the Google Fonts stylesheet and the JSZip script
+# both carry crossorigin, and the ffmpeg core is fetched with fetch() and turned
+# into a blob URL.

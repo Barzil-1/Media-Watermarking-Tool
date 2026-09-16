@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watermark Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Oswald:wght@400;700&family=Bebas+Neue&family=Montserrat:wght@400;800&family=Roboto+Condensed:wght@400;700&family=Roboto+Slab:wght@400;700&display=swap" rel="stylesheet" crossorigin>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1673AE">
+<style>
+:root{
+  --bg:#E9EDF1; --panel:#FAFBFC; --ink:#18212B; --muted:#5B6775; --line:#D3D9E0;
+  --accent:#1673AE; --accent-ink:#FFFFFF; --accent-soft:#DCEAF4; --stage:#2E343B; --danger:#B3261E;
+  --r-s:6px; --r-m:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12161B; --panel:#1A2027; --ink:#E6EBF0; --muted:#9AA6B2; --line:#2C343D;
+    --accent:#3AA7E6; --accent-ink:#06131C; --accent-soft:#16303F; --stage:#0D1014; --danger:#F2867D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12161B; --panel:#1A2027; --ink:#E6EBF0; --muted:#9AA6B2; --line:#2C343D;
+  --accent:#3AA7E6; --accent-ink:#06131C; --accent-soft:#16303F; --stage:#0D1014; --danger:#F2867D;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%}
+body{
+  margin:0; font-family:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:14px; line-height:1.45; color:var(--ink); background:var(--bg);
+  display:flex; flex-direction:column; min-height:100vh;
+}
+button{font:inherit}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Top bar */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{width:30px;height:30px;flex:none;color:var(--accent)}
+.brand h1{margin:0;font-size:24px;font-weight:700;font-stretch:72%;line-height:1;letter-spacing:.005em}
+.bar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.count{color:var(--muted);font-variant-numeric:tabular-nums;margin-right:4px}
+.btn{font-weight:600;padding:8px 14px;border-radius:var(--r-s);border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--muted);padding:6px 10px}
+.btn.quiet:hover:not(:disabled){color:var(--ink);border-color:var(--line)}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.progress{height:3px;background:var(--line)}
+.progress > div{height:100%;width:0;background:var(--accent);transition:width .15s linear}
+
+/* Layout */
+.layout{flex:1;display:grid;grid-template-columns:340px 1fr;min-height:0}
+.panel{background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;padding:0 20px 24px}
+.panel section{padding:18px 0 8px;border-bottom:1px solid var(--line)}
+.panel section:last-of-type{border-bottom:none}
+.panel h2{font-size:16px;font-weight:650;font-stretch:85%;margin:0 0 12px}
+.field{margin-bottom:14px}
+.field-label{display:flex;justify-content:space-between;align-items:baseline;font-weight:500;margin-bottom:6px}
+output{color:var(--muted);font-variant-numeric:tabular-nums}
+textarea,select,input[type=text]{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:var(--r-s);padding:8px 10px}
+textarea{resize:vertical;min-height:78px;line-height:1.4}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.hint{color:var(--muted);font-size:12.5px;margin:6px 0 0}
+.checks{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:14px}
+.check{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.check input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+
+.styles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.style-opt{position:relative}
+.style-opt input{position:absolute;opacity:0;pointer-events:none}
+.style-opt label{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 2px 8px;border:1px solid var(--line);border-radius:var(--r-s);cursor:pointer;font-size:12px;text-align:center;line-height:1.15;color:var(--muted);height:100%}
+.style-opt svg{width:30px;height:30px}
+.style-opt label:hover{color:var(--ink)}
+.style-opt input:checked + label{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.style-opt input:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+
+.colors{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.color{display:flex;align-items:center;gap:8px;cursor:pointer}
+.color input{width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:50%;background:none;cursor:pointer;flex:none}
+.color input::-webkit-color-swatch-wrapper{padding:0}
+.color input::-webkit-color-swatch{border:none;border-radius:50%}
+.color input::-moz-color-swatch{border:none;border-radius:50%}
+
+.pos-row{display:flex;gap:18px;align-items:flex-start;margin-bottom:10px}
+.pos-row .field{flex:1;margin-bottom:0}
+.posgrid{display:grid;grid-template-columns:repeat(3,34px);gap:4px}
+.posgrid button{width:34px;height:28px;border:1px solid var(--line);background:var(--bg);border-radius:4px;cursor:pointer;display:grid;place-items:center;padding:0}
+.posgrid button::after{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted);opacity:.45}
+.posgrid button:hover::after{opacity:.9}
+.posgrid button.on{border-color:var(--accent);background:var(--accent-soft)}
+.posgrid button.on::after{background:var(--accent);opacity:1}
+.panel-foot{padding-top:14px}
+
+/* Workspace */
+.workspace{display:flex;flex-direction:column;min-width:0;min-height:0}
+.stage{flex:1;min-height:320px;background:var(--stage);position:relative;overflow:hidden}
+.stage-inner{position:absolute;inset:24px;display:flex;align-items:center;justify-content:center}
+#preview{max-width:100%;max-height:100%;display:block;box-shadow:0 2px 28px rgba(0,0,0,.45);touch-action:none;cursor:grab}
+#preview.dragging{cursor:grabbing}
+#preview.nodrag{cursor:default}
+.empty{color:#C9D1DA;text-align:center;max-width:360px;padding:36px 28px;border:1.5px dashed #56606B;border-radius:var(--r-m)}
+.empty p{margin:0 0 16px;font-size:15px}
+.empty .small{font-size:12.5px;color:#8E99A5;margin:14px 0 0}
+.stage-tip{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);font-size:12px;color:#AEB8C2;background:rgba(0,0,0,.35);padding:3px 10px;border-radius:20px;pointer-events:none;white-space:nowrap}
+.drop-cover{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(22,115,174,.28);border:2px dashed #7CC4EE;color:#fff;font-size:18px;font-weight:600;z-index:5}
+body.dropping .drop-cover{display:flex}
+
+.stage-bar{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.meta{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta .dims{color:var(--muted);margin-left:8px;font-variant-numeric:tabular-nums}
+.stage-actions{display:flex;gap:4px;flex-wrap:wrap}
+
+.strip{display:flex;gap:8px;padding:10px 14px;overflow-x:auto;background:var(--panel);min-height:96px;align-items:center}
+.strip:empty::before{content:"Your files will line up here.";color:var(--muted)}
+.thumb{position:relative;flex:none;width:76px;height:76px;border-radius:var(--r-s);overflow:hidden;border:2px solid transparent;background:var(--bg)}
+.thumb.active{border-color:var(--accent)}
+.thumb-btn{display:block;width:100%;height:100%;padding:0;border:none;background:none;cursor:pointer}
+.thumb-btn img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;font-size:15px;line-height:22px;padding:0;cursor:pointer;opacity:0}
+.thumb:hover .thumb-x,.thumb-x:focus-visible{opacity:1}
+@media (hover:none){.thumb-x{opacity:1}}
+.thumb-dot{position:absolute;left:5px;bottom:5px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:1.5px solid #fff;display:none}
+.thumb.own .thumb-dot{display:block}
+
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);background:var(--ink);color:var(--panel);padding:10px 16px;border-radius:var(--r-s);font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:calc(100vw - 32px);z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion: reduce){.toast,.progress>div{transition:none}}
+
+/* Progress panel */
+.working{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:6;padding:20px}
+.work-card{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-m);padding:22px 24px;width:min(360px,100%);text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.45)}
+.work-title{margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-pct{font-size:36px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;margin-bottom:14px;letter-spacing:-.01em}
+.work-bar{height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.work-bar > div{height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .2s linear}
+.work-bar.small{height:5px}
+.work-bar > div.pulse{width:35%;animation:work-slide 1.4s ease-in-out infinite;transition:none}
+@keyframes work-slide{0%{margin-left:-35%}100%{margin-left:100%}}
+.work-sub{margin:11px 0 0;color:var(--muted);font-size:12.5px;min-height:1.2em}
+.work-overall{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.work-overall p{margin:0 0 7px;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.work-card .btn{margin-top:18px;width:100%}
+@media (prefers-reduced-motion: reduce){
+  .work-bar > div{transition:none}
+  .work-bar > div.pulse{animation:none;width:100%;opacity:.45}
+}
+
+/* Video bits */
+.job{color:var(--muted);font-variant-numeric:tabular-nums;max-width:min(40vw,340px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scrub{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+.scrub input[type=range]{flex:1;min-width:80px}
+.scrub-time{color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px;white-space:nowrap}
+.thumb.vid .thumb-btn{position:relative}
+.thumb.vid .thumb-btn img{background:#000}
+.thumb.vid .thumb-btn::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:0;height:0;border-left:13px solid rgba(255,255,255,.94);border-top:9px solid transparent;border-bottom:9px solid transparent;filter:drop-shadow(0 1px 2px rgba(0,0,0,.65));pointer-events:none}
+.thumb-badge{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;line-height:1;padding:3px 5px;border-radius:3px;font-variant-numeric:tabular-nums;pointer-events:none}
+
+@media (max-width:880px){
+  body{height:auto}
+  .layout{grid-template-columns:1fr}
+  .workspace{order:-1}
+  .stage{min-height:56vh;flex:none}
+  .panel{border-right:none;border-top:1px solid var(--line);overflow:visible}
+  .stage-tip{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 13h14M11 17h10M12.5 21h7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    <h1>Watermark Tool</h1>
+  </div>
+  <div class="bar-actions">
+    <span class="job" id="job" hidden></span>
+    <span class="count" id="count">Nothing added yet</span>
+    <button class="btn" id="addBtn" type="button">Add files</button>
+    <button class="btn primary" id="dlAll" type="button" disabled>Download all</button>
+    <button class="btn danger" id="cancelBtn" type="button" hidden>Stop</button>
+  </div>
+  <input type="file" id="fileInput" accept="image/*,video/*" multiple class="sr" tabindex="-1" aria-hidden="true">
+</header>
+<div class="progress" id="progress" hidden><div></div></div>
+
+<main class="layout">
+  <aside class="panel" aria-label="Watermark settings">
+
+    <section>
+      <h2>Text</h2>
+      <div class="field">
+        <label class="field-label" for="wmText">Watermark text</label>
+        <textarea id="wmText" data-key="text" rows="3" spellcheck="false"></textarea>
+        <p class="hint">Each line in this box becomes a line in the watermark.</p>
+      </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" data-key="uppercase"> Capital letters</label>
+        <label class="check"><input type="checkbox" data-key="bold"> Bold</label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Style</h2>
+      <div class="styles" role="radiogroup" aria-label="Watermark style">
+        <div class="style-opt">
+          <input type="radio" name="style" id="st-badge" value="badge" data-key="style">
+          <label for="st-badge"><svg viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" fill="currentColor" opacity=".25"/><path d="M9 12.5h12M10 15.5h10M11.5 18.5h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Round badge</label>
+        </div>
+        <div class="style-opt">
+          <input type="radio" name="style" id="st-plain" value="plain" data-key="style">
+          <label for="st-plain"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M7 11h16M8.5 15h13M10 19h10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Plain text</label>
+        </div>
+        <div class="style-opt">
+          <input type="radio" name="style" id="st-label" value="label" data-key="style">
+          <label for="st-label"><svg viewBox="0 0 30 30" aria-hidden="true"><rect x="3" y="9" width="24" height="12" rx="6" fill="currentColor" opacity=".25"/><path d="M8.5 15h13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Rounded label</label>
+        </div>
+        <div class="style-opt">
+          <input type="radio" name="style" id="st-tiled" value="tiled" data-key="style">
+          <label for="st-tiled"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M4 12l7-5M15 12l7-5M9.5 19l7-5M20.5 19l6-4.3M4 26l7-5M15 26l7-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Repeated</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="font">Font</label>
+        <select id="font" data-key="font">
+          <option value="Oswald">Oswald (condensed)</option>
+          <option value="Bebas">Bebas Neue (tall capitals)</option>
+          <option value="RobotoCondensed">Roboto Condensed</option>
+          <option value="Montserrat">Montserrat (wide)</option>
+          <option value="Archivo">Archivo</option>
+          <option value="Slab">Roboto Slab (serif)</option>
+          <option value="Arial">Arial (system)</option>
+        </select>
+      </div>
+
+      <div class="colors">
+        <label class="color"><input type="color" data-key="textColor"> Text color</label>
+        <label class="color"><input type="color" data-key="bgColor"> <span id="bgLabel">Badge color</span></label>
+      </div>
+
+      <div class="checks">
+        <label class="check"><input type="checkbox" data-key="shadow"> Shadow</label>
+        <label class="check"><input type="checkbox" data-key="outline"> <span id="outlineLabel">Border ring</span></label>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="lineHeight">Line spacing <output data-for="lineHeight"></output></label>
+        <input type="range" id="lineHeight" data-key="lineHeight" min="0.8" max="1.8" step="0.05">
+      </div>
+    </section>
+
+    <section>
+      <h2>Size and placement</h2>
+      <div class="field">
+        <label class="field-label" for="size">Size <output data-for="size"></output></label>
+        <input type="range" id="size" data-key="size" min="5" max="90" step="1">
+        <p class="hint">Measured against each image's shorter side, so it looks the same on every photo.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="opacity">Opacity <output data-for="opacity"></output></label>
+        <input type="range" id="opacity" data-key="opacity" min="10" max="100" step="1">
+      </div>
+      <div class="field">
+        <label class="field-label" for="rotation">Rotation <output data-for="rotation"></output></label>
+        <input type="range" id="rotation" data-key="rotation" min="-180" max="180" step="1">
+      </div>
+      <div class="field" id="gapField">
+        <label class="field-label" for="gap">Spacing between repeats <output data-for="gap"></output></label>
+        <input type="range" id="gap" data-key="gap" min="0" max="200" step="5">
+      </div>
+
+      <div id="posBlock">
+        <div class="pos-row">
+          <div>
+            <div class="field-label" id="posLabel">Position</div>
+            <div class="posgrid" id="posgrid" role="group" aria-labelledby="posLabel"></div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="margin">Edge gap <output data-for="margin"></output></label>
+            <input type="range" id="margin" data-key="margin" min="0" max="20" step="0.5">
+          </div>
+        </div>
+        <p class="hint">Pick a spot, or drag the watermark on the preview.</p>
+        <div class="checks" style="margin-top:12px">
+          <label class="check"><input type="checkbox" data-key="perImage"> Position each image separately</label>
+        </div>
+        <button class="btn quiet" id="resetPos" type="button" disabled>Use the shared position for this image</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Download settings</h2>
+      <div class="field">
+        <label class="field-label" for="format">File type</label>
+        <select id="format" data-key="format">
+          <option value="original">Same as the original</option>
+          <option value="image/jpeg">JPG</option>
+          <option value="image/png">PNG</option>
+          <option value="image/webp">WebP</option>
+        </select>
+      </div>
+      <div class="field" id="qualityField">
+        <label class="field-label" for="quality">Quality <output data-for="quality"></output></label>
+        <input type="range" id="quality" data-key="quality" min="50" max="100" step="1">
+        <p class="hint">Applies to JPG and WebP. PNG is always full quality.</p>
+      </div>
+      <div class="field" id="videoField" hidden>
+        <label class="field-label" for="videoMax">Video size</label>
+        <select id="videoMax" data-key="videoMax">
+          <option value="original">Keep the original size</option>
+          <option value="1920">Shrink to 1920 (Full HD)</option>
+          <option value="1280">Shrink to 1280 (HD)</option>
+        </select>
+        <p class="hint">Videos are always saved as MP4 with the sound kept. A smaller size finishes much faster, and Telegram shrinks big videos anyway.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="suffix">Add to file names</label>
+        <input type="text" id="suffix" data-key="suffix" maxlength="40" spellcheck="false">
+        <p class="hint" id="nameExample"></p>
+      </div>
+    </section>
+
+    <div class="panel-foot">
+      <button class="btn quiet" id="resetAll" type="button">Reset all settings</button>
+    </div>
+  </aside>
+
+  <section class="workspace" aria-label="Files">
+    <div class="stage" id="stage">
+      <div class="stage-inner">
+        <canvas id="preview" hidden aria-label="Watermarked preview"></canvas>
+        <div class="empty" id="empty">
+          <p>Add the photos and videos you want to watermark.</p>
+          <button class="btn primary" id="emptyAdd" type="button">Choose files</button>
+          <p class="small">Or drop them anywhere on this page. JPG, PNG, WebP and MP4 work best.</p>
+        </div>
+      </div>
+      <div class="stage-tip" id="stageTip" hidden>Drag to move the watermark</div>
+      <div class="drop-cover">Drop files to add them</div>
+      <div class="working" id="working" hidden>
+        <div class="work-card" role="status" aria-live="polite">
+          <p class="work-title" id="workTitle">Working</p>
+          <div class="work-pct" id="workPct">0%</div>
+          <div class="work-bar"><div id="workBar"></div></div>
+          <p class="work-sub" id="workSub"></p>
+          <div class="work-overall" id="workOverall" hidden>
+            <p id="workOverallText">File 1 of 1</p>
+            <div class="work-bar small"><div id="workOverallBar"></div></div>
+          </div>
+          <button class="btn danger" id="workStop" type="button">Stop</button>
+        </div>
+      </div>
+    </div>
+    <div class="scrub" id="scrub" hidden>
+      <input type="range" id="scrubRange" min="0" max="1000" step="1" value="0" aria-label="Point in the video">
+      <span class="scrub-time" id="scrubTime">0:00 / 0:00</span>
+    </div>
+    <div class="stage-bar">
+      <div class="meta" id="meta">&nbsp;</div>
+      <div class="stage-actions">
+        <button class="btn quiet" id="prevBtn" type="button" disabled aria-label="Previous file">Previous</button>
+        <button class="btn quiet" id="nextBtn" type="button" disabled aria-label="Next file">Next</button>
+        <button class="btn quiet" id="dlOne" type="button" disabled>Download this file</button>
+        <button class="btn quiet danger" id="clearAll" type="button" disabled>Remove all</button>
+      </div>
+    </div>
+    <div class="strip" id="strip" role="list" aria-label="Uploaded files"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script>
+(() => {
+  "use strict";
+
+  /* ---------- Settings ---------- */
+  const DEFAULTS = {
+    text: "TELEGRAM\n@YOURCHANNEL\nNEWS",
+    uppercase: true,
+    bold: true,
+    style: "badge",
+    font: "Oswald",
+    textColor: "#1B1B1B",
+    bgColor: "#E6E6E6",
+    shadow: true,
+    outline: false,
+    lineHeight: 1.1,
+    size: 30,
+    opacity: 92,
+    rotation: 0,
+    gap: 60,
+    anchor: "mc",
+    cx: 0.5,
+    cy: 0.5,
+    margin: 4,
+    perImage: false,
+    format: "original",
+    quality: 92,
+    videoMax: "original",
+    suffix: "_wm"
+  };
+  let S = { ...DEFAULTS };
+
+  const FONTS = {
+    Oswald: '"Oswald", "Arial Narrow", sans-serif',
+    Bebas: '"Bebas Neue", "Arial Narrow", sans-serif',
+    RobotoCondensed: '"Roboto Condensed", "Arial Narrow", sans-serif',
+    Montserrat: '"Montserrat", Arial, sans-serif',
+    Archivo: '"Archivo", Arial, sans-serif',
+    Slab: '"Roboto Slab", Georgia, serif',
+    Arial: 'Arial, Helvetica, sans-serif'
+  };
+
+  const ANCHORS = [
+    ["tl", "Top left"], ["tc", "Top center"], ["tr", "Top right"],
+    ["ml", "Middle left"], ["mc", "Center"], ["mr", "Middle right"],
+    ["bl", "Bottom left"], ["bc", "Bottom center"], ["br", "Bottom right"]
+  ];
+
+  /* ---------- State ---------- */
+  // { id, file, name, type, kind:"image"|"video", url, img, video, thumb,
+  //   w, h, duration, time, ready, pos }
+  const items = [];
+  let current = -1;
+  let nextId = 1;
+  let busy = false;
+
+  /* ---------- Elements ---------- */
+  const $ = (s) => document.querySelector(s);
+  const fileInput = $("#fileInput");
+  const preview = $("#preview");
+  const pctx = preview.getContext("2d");
+  const els = {
+    count: $("#count"), dlAll: $("#dlAll"), empty: $("#empty"), meta: $("#meta"),
+    strip: $("#strip"), prev: $("#prevBtn"), next: $("#nextBtn"), dlOne: $("#dlOne"),
+    clearAll: $("#clearAll"), toast: $("#toast"), progress: $("#progress"),
+    posgrid: $("#posgrid"), posBlock: $("#posBlock"), gapField: $("#gapField"),
+    bgLabel: $("#bgLabel"), outlineLabel: $("#outlineLabel"), resetPos: $("#resetPos"),
+    qualityField: $("#qualityField"), nameExample: $("#nameExample"), stageTip: $("#stageTip"),
+    job: $("#job"), cancel: $("#cancelBtn"), scrub: $("#scrub"), scrubRange: $("#scrubRange"),
+    scrubTime: $("#scrubTime"), videoField: $("#videoField"),
+    working: $("#working"), workTitle: $("#workTitle"), workPct: $("#workPct"),
+    workBar: $("#workBar"), workSub: $("#workSub"), workOverall: $("#workOverall"),
+    workOverallText: $("#workOverallText"), workOverallBar: $("#workOverallBar"),
+    workStop: $("#workStop")
+  };
+
+  /* ---------- Text helpers ---------- */
+  function getLines() {
+    return S.text.split("\n").map((l) => l.trim()).filter(Boolean)
+      .map((l) => (S.uppercase ? l.toUpperCase() : l));
+  }
+  function fontStr(px) {
+    const weight = S.bold && S.font !== "Bebas" ? 700 : 400;
+    return `${weight} ${px}px ${FONTS[S.font] || FONTS.Arial}`;
+  }
+  function ensureFont() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    const sample = getLines().join(" ") || "A";
+    return document.fonts.load(fontStr(48), sample).catch(() => {});
+  }
+  function fitText(ctx, lines, maxW, maxH) {
+    ctx.font = fontStr(100);
+    const w100 = lines.map((l) => ctx.measureText(l).width);
+    const mw = Math.max(1, ...w100);
+    const fs = Math.max(1, Math.min((maxW * 100) / mw, maxH / (lines.length * S.lineHeight)));
+    return { fs, w100, textW: (mw * fs) / 100, textH: lines.length * fs * S.lineHeight };
+  }
+  function textBlock(ctx, lines, fs, ox, oy, mode) {
+    ctx.font = fontStr(fs);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    const cap = ctx.measureText("H").actualBoundingBoxAscent || fs * 0.7;
+    const lh = fs * S.lineHeight;
+    const n = lines.length;
+    for (let i = 0; i < n; i++) {
+      const yb = oy + (i - (n - 1) / 2) * lh + cap / 2;
+      if (mode === "stroke") ctx.strokeText(lines[i], ox, yb);
+      else ctx.fillText(lines[i], ox, yb);
+    }
+  }
+  function shadowOn(ctx, blur) {
+    if (!S.shadow) return;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = blur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = blur * 0.25;
+  }
+  function shadowOff(ctx) {
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+  }
+  function roundRectPath(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* ---------- Styles ----------
+     To add a style: give it layout() returning {w, h, ...} and draw() that
+     paints centered on (0, 0). Full-frame styles use fullFrame + drawFull(). */
+  const STYLES = {
+    badge: {
+      bgName: "Badge color", outlineName: "Border ring",
+      layout(ctx, lines, base) {
+        const D = (base * S.size) / 100;
+        const r = D / 2;
+        const f = fitText(ctx, lines, D * 0.82, D * 0.64);
+        let fs = f.fs;
+        for (let k = 0; k < 40; k++) {
+          const lh = fs * S.lineHeight;
+          const total = lines.length * lh;
+          let fits = true;
+          for (let i = 0; i < lines.length; i++) {
+            const top = -total / 2 + i * lh + lh * 0.18;
+            const bottom = -total / 2 + (i + 1) * lh - lh * 0.18;
+            const edge = Math.min(r * 0.98, Math.max(Math.abs(top), Math.abs(bottom)));
+            const chord = 2 * Math.sqrt(r * r - edge * edge) * 0.86;
+            if ((f.w100[i] * fs) / 100 > chord) { fits = false; break; }
+          }
+          if (fits) break;
+          fs *= 0.95;
+        }
+        return { w: D, h: D, D, fs, lines };
+      },
+      draw(ctx, L) {
+        const r = L.D / 2;
+        shadowOn(ctx, r * 0.12);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fillStyle = S.bgColor;
+        ctx.fill();
+        shadowOff(ctx);
+        if (S.outline) {
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2);
+          ctx.lineWidth = r * 0.025;
+          ctx.strokeStyle = S.textColor;
+          ctx.stroke();
+        }
+        ctx.fillStyle = S.textColor;
+        textBlock(ctx, L.lines, L.fs, 0, 0, "fill");
+      }
+    },
+
+    plain: {
+      bgName: "Outline color", outlineName: "Outline",
+      layout(ctx, lines, base) {
+        const W = (base * S.size) / 100;
+        const f = fitText(ctx, lines, W, W * 0.8);
+        return { w: f.textW, h: f.textH, fs: f.fs, lines };
+      },
+      draw(ctx, L) {
+        ctx.lineJoin = "round";
+        shadowOn(ctx, L.fs * 0.12);
+        if (S.outline) {
+          ctx.strokeStyle = S.bgColor;
+          ctx.lineWidth = L.fs * 0.14;
+          textBlock(ctx, L.lines, L.fs, 0, 0, "stroke");
+          shadowOff(ctx);
+        }
+        ctx.fillStyle = S.textColor;
+        textBlock(ctx, L.lines, L.fs, 0, 0, "fill");
+        shadowOff(ctx);
+      }
+    },
+
+    label: {
+      bgName: "Label color", outlineName: "Border",
+      layout(ctx, lines, base) {
+        const W = (base * S.size) / 100;
+        const f = fitText(ctx, lines, W * 0.82, W * 0.6);
+        const padX = f.fs * 0.7;
+        const padY = f.fs * 0.45;
+        return { w: f.textW + padX * 2, h: f.textH + padY * 2, fs: f.fs, lines };
+      },
+      draw(ctx, L) {
+        const radius = L.lines.length === 1 ? L.h / 2 : Math.min(L.h / 2, L.fs * 0.9);
+        shadowOn(ctx, L.fs * 0.3);
+        roundRectPath(ctx, -L.w / 2, -L.h / 2, L.w, L.h, radius);
+        ctx.fillStyle = S.bgColor;
+        ctx.fill();
+        shadowOff(ctx);
+        if (S.outline) {
+          const lw = L.fs * 0.08;
+          roundRectPath(ctx, -L.w / 2 + lw * 2, -L.h / 2 + lw * 2, L.w - lw * 4, L.h - lw * 4, Math.max(0, radius - lw * 2));
+          ctx.lineWidth = lw;
+          ctx.strokeStyle = S.textColor;
+          ctx.stroke();
+        }
+        ctx.fillStyle = S.textColor;
+        textBlock(ctx, L.lines, L.fs, 0, 0, "fill");
+      }
+    },
+
+    tiled: {
+      bgName: "Outline color", outlineName: "Outline", fullFrame: true,
+      drawFull(ctx, lines, base, W, H) {
+        const Wt = (base * S.size) / 100;
+        const f = fitText(ctx, lines, Wt, Wt * 0.6);
+        const stepX = f.textW * (1.35 + S.gap / 100);
+        const stepY = f.textH * (1.6 + S.gap / 100);
+        const R = Math.hypot(W, H) / 2 + Math.max(stepX, stepY);
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate((S.rotation * Math.PI) / 180);
+        ctx.lineJoin = "round";
+        let row = 0;
+        for (let y = -R; y <= R; y += stepY, row++) {
+          const off = row % 2 ? stepX / 2 : 0;
+          for (let x = -R - off; x <= R + stepX; x += stepX) {
+            if (S.outline) {
+              ctx.strokeStyle = S.bgColor;
+              ctx.lineWidth = f.fs * 0.14;
+              textBlock(ctx, lines, f.fs, x, y, "stroke");
+            }
+            shadowOn(ctx, f.fs * 0.1);
+            ctx.fillStyle = S.textColor;
+            textBlock(ctx, lines, f.fs, x, y, "fill");
+            shadowOff(ctx);
+          }
+        }
+      }
+    }
+  };
+
+  /* ---------- Placement and drawing ---------- */
+  function effectivePos(item) {
+    if (S.perImage && item && item.pos) return item.pos;
+    return { anchor: S.anchor, cx: S.cx, cy: S.cy };
+  }
+  function placement(w, h, W, H, base, pos) {
+    if (pos.anchor === "custom") return { x: pos.cx * W, y: pos.cy * H };
+    const a = (S.rotation * Math.PI) / 180;
+    const bw = Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a));
+    const bh = Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a));
+    const m = (base * S.margin) / 100;
+    const x = { l: m + bw / 2, c: W / 2, r: W - m - bw / 2 }[pos.anchor[1]];
+    const y = { t: m + bh / 2, m: H / 2, b: H - m - bh / 2 }[pos.anchor[0]];
+    return { x, y };
+  }
+  function drawWatermark(ctx, W, H, pos) {
+    const lines = getLines();
+    if (!lines.length) return;
+    const base = Math.min(W, H);
+    const style = STYLES[S.style] || STYLES.badge;
+    ctx.save();
+    ctx.globalAlpha = S.opacity / 100;
+    if (style.fullFrame) {
+      style.drawFull(ctx, lines, base, W, H);
+    } else {
+      const L = style.layout(ctx, lines, base);
+      const p = placement(L.w, L.h, W, H, base, pos);
+      ctx.translate(p.x, p.y);
+      ctx.rotate((S.rotation * Math.PI) / 180);
+      style.draw(ctx, L);
+    }
+    ctx.restore();
+  }
+
+  /* ---------- Preview ---------- */
+  let rafId = 0;
+  function scheduleRender() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => { rafId = 0; renderPreview(); });
+  }
+  function renderPreview() {
+    const it = items[current];
+    const has = !!(it && it.ready);
+    preview.hidden = !has;
+    els.empty.hidden = items.length > 0;
+    els.stageTip.hidden = !has || S.style === "tiled";
+    if (!has) return;
+    const src = it.kind === "video" ? it.video : it.img;
+    if (it.kind === "video" && it.video.readyState < 2) return;
+    const k = Math.min(1, 1800 / Math.max(it.w, it.h));
+    const W = Math.max(1, Math.round(it.w * k));
+    const H = Math.max(1, Math.round(it.h * k));
+    if (preview.width !== W) preview.width = W;
+    if (preview.height !== H) preview.height = H;
+    pctx.clearRect(0, 0, W, H);
+    try { pctx.drawImage(src, 0, 0, W, H); } catch (e) { return; }
+    drawWatermark(pctx, W, H, effectivePos(it));
+  }
+
+  /* ---------- Files ---------- */
+  const IMAGE_RE = /\.(jpe?g|png|webp|gif|bmp|avif)$/i;
+  const VIDEO_RE = /\.(mp4|m4v|mov|webm|mkv|avi|3gp|3g2|ogv|mpe?g|wmv|flv|ts)$/i;
+  const VIDEO_WARN_BYTES = 150 * 1024 * 1024;
+  const VIDEO_MAX_BYTES = 400 * 1024 * 1024;
+  const BLANK_PX = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+  const isVideoFile = (f) => (f.type || "").startsWith("video/") || VIDEO_RE.test(f.name);
+  const isImageFile = (f) => (f.type || "").startsWith("image/") || IMAGE_RE.test(f.name);
+
+  function fmtTime(sec) {
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    sec = Math.round(sec);
+    return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }
+  function fmtMB(bytes) {
+    return `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB`;
+  }
+
+  const MOBILE_UA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  let mobileVideoWarned = false;
+
+  function addFiles(list) {
+    const all = [...list];
+    const picked = all.filter((f) => isVideoFile(f) || isImageFile(f));
+    const ignored = all.length - picked.length;
+    if (!picked.length) {
+      toast("Nothing was added. Choose JPG, PNG or WebP pictures, or MP4 videos.");
+      return;
+    }
+    const before = items.length;
+    const tooBig = [];
+    let bigWarn = "";
+    for (const file of picked) {
+      if (isVideoFile(file)) {
+        if (file.size > VIDEO_MAX_BYTES) { tooBig.push(file.name); continue; }
+        if (file.size > VIDEO_WARN_BYTES && !bigWarn) bigWarn = file.name;
+        addVideo(file);
+      } else {
+        addImage(file);
+      }
+    }
+    if (current < 0 && items.length) current = Math.min(before, items.length - 1);
+    ensureFont().then(scheduleRender);
+    refresh();
+    const addedVideo = picked.some(isVideoFile);
+    if (tooBig.length) {
+      toast(`${tooBig.join(", ")} ${tooBig.length > 1 ? "are" : "is"} too big for the browser (the limit is ${fmtMB(VIDEO_MAX_BYTES)}). Trim the video or save a smaller copy first.`);
+    } else if (ignored) {
+      toast(`${ignored} file${ignored > 1 ? "s were" : " was"} skipped. Only pictures and videos can be watermarked.`);
+    } else if (addedVideo && MOBILE_UA && !mobileVideoWarned) {
+      mobileVideoWarned = true;
+      toast("Video works best on a laptop or desktop. Phones can run low on memory partway through and stop the process — photos are fine here either way.");
+    } else if (bigWarn) {
+      toast(`${bigWarn} is a big video, so it will take a while to finish.`);
+    }
+  }
+
+  function addImage(file) {
+    const item = { id: nextId++, file, name: file.name, type: file.type, kind: "image",
+      url: URL.createObjectURL(file), img: new Image(), video: null, thumb: "",
+      w: 0, h: 0, duration: 0, time: 0, ready: false, pos: null };
+    items.push(item);
+    item.img.decoding = "async";
+    item.img.onload = () => {
+      item.w = item.img.naturalWidth;
+      item.h = item.img.naturalHeight;
+      item.ready = true;
+      if (current < 0) current = items.indexOf(item);
+      refresh();
+    };
+    item.img.onerror = () => {
+      removeItem(item.id, true);
+      toast(`${file.name} could not be opened. Convert it to JPG or PNG and add it again.`);
+    };
+    item.img.src = item.url;
+  }
+
+  function addVideo(file) {
+    const v = document.createElement("video");
+    const item = { id: nextId++, file, name: file.name, type: file.type, kind: "video",
+      url: URL.createObjectURL(file), img: null, video: v, thumb: "",
+      w: 0, h: 0, duration: 0, time: 0, ready: false, pos: null };
+    items.push(item);
+    v.preload = "auto";
+    v.muted = true;
+    v.playsInline = true;
+    v.addEventListener("loadeddata", () => {
+      item.w = v.videoWidth;
+      item.h = v.videoHeight;
+      item.duration = isFinite(v.duration) ? v.duration : 0;
+      if (!item.w || !item.h) { failVideo(item); return; }
+      seekTo(item, item.duration ? Math.min(item.duration * 0.1, 1) : 0).then(() => {
+        grabThumb(item);
+        item.ready = true;
+        if (current < 0) current = items.indexOf(item);
+        refresh();
+        ensureEngine().catch(() => {});
+      });
+    }, { once: true });
+    v.addEventListener("error", () => failVideo(item), { once: true });
+    v.src = item.url;
+    v.load();
+  }
+
+  function failVideo(item) {
+    const name = item.name;
+    removeItem(item.id, true);
+    toast(`${name} could not be opened. Save it as an MP4 and add it again.`);
+  }
+
+  function seekTo(item, t) {
+    const v = item.video;
+    const last = item.duration ? Math.max(0, item.duration - 0.05) : 0;
+    item.time = Math.max(0, Math.min(t, last));
+    return new Promise((res) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        v.removeEventListener("seeked", finish);
+        res();
+      };
+      const timer = setTimeout(finish, 4000);
+      v.addEventListener("seeked", finish);
+      try { v.currentTime = item.time; } catch (e) { finish(); }
+      if (v.readyState >= 2 && Math.abs(v.currentTime - item.time) < 0.005) finish();
+    });
+  }
+
+  function grabThumb(item) {
+    try {
+      const c = document.createElement("canvas");
+      c.width = 152;
+      c.height = 152;
+      const g = c.getContext("2d");
+      g.fillStyle = "#000";
+      g.fillRect(0, 0, 152, 152);
+      const k = Math.max(152 / item.w, 152 / item.h);
+      const dw = item.w * k;
+      const dh = item.h * k;
+      g.drawImage(item.video, (152 - dw) / 2, (152 - dh) / 2, dw, dh);
+      item.thumb = c.toDataURL("image/jpeg", 0.72);
+      c.width = 0;
+      c.height = 0;
+    } catch (e) {
+      item.thumb = "";
+    }
+  }
+
+  let seekBusy = false;
+  let pendingSeek = null;
+  async function pumpSeek(item) {
+    if (seekBusy) return;
+    seekBusy = true;
+    while (pendingSeek !== null) {
+      const t = pendingSeek;
+      pendingSeek = null;
+      await seekTo(item, t);
+      renderPreview();
+    }
+    seekBusy = false;
+  }
+
+  function disposeItem(it) {
+    if (it.video) {
+      try { it.video.pause(); } catch (e) {}
+      it.video.removeAttribute("src");
+      try { it.video.load(); } catch (e) {}
+    }
+    URL.revokeObjectURL(it.url);
+  }
+  function removeItem(id, silent) {
+    const i = items.findIndex((x) => x.id === id);
+    if (i < 0) return;
+    const kind = items[i].kind;
+    disposeItem(items[i]);
+    items.splice(i, 1);
+    if (!items.length) current = -1;
+    else if (current >= items.length) current = items.length - 1;
+    else if (i < current) current--;
+    refresh();
+    if (!silent) toast(kind === "video" ? "Video removed." : "Image removed.");
+  }
+  function clearAll() {
+    items.forEach(disposeItem);
+    items.length = 0;
+    current = -1;
+    refresh();
+  }
+  function select(i) {
+    if (i < 0 || i >= items.length) return;
+    current = i;
+    refresh();
+    const t = els.strip.children[i];
+    if (t) t.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  /* ---------- UI refresh ---------- */
+  function refresh() {
+    renderStrip();
+    updateBar();
+    updatePosUI();
+    scheduleRender();
+  }
+  function renderStrip() {
+    els.strip.textContent = "";
+    items.forEach((it, i) => {
+      const wrap = document.createElement("div");
+      wrap.className = "thumb" + (i === current ? " active" : "") + (S.perImage && it.pos ? " own" : "") + (it.kind === "video" ? " vid" : "");
+      wrap.setAttribute("role", "listitem");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "thumb-btn";
+      b.setAttribute("aria-label", `Show ${it.name}`);
+      if (i === current) b.setAttribute("aria-current", "true");
+      const img = document.createElement("img");
+      img.src = it.kind === "video" ? (it.thumb || BLANK_PX) : it.url;
+      img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+      b.appendChild(img);
+      b.addEventListener("click", () => select(i));
+      const x = document.createElement("button");
+      x.type = "button";
+      x.className = "thumb-x";
+      x.textContent = "\u00D7";
+      x.setAttribute("aria-label", `Remove ${it.name}`);
+      x.addEventListener("click", () => removeItem(it.id));
+      const dot = document.createElement("span");
+      dot.className = "thumb-dot";
+      dot.title = "Has its own position";
+      wrap.append(b, x, dot);
+      if (it.kind === "video") {
+        const badge = document.createElement("span");
+        badge.className = "thumb-badge";
+        badge.textContent = fmtTime(it.duration);
+        wrap.appendChild(badge);
+      }
+      els.strip.appendChild(wrap);
+    });
+  }
+  function countLabel() {
+    if (!items.length) return "Nothing added yet";
+    const v = items.filter((x) => x.kind === "video").length;
+    const i = items.length - v;
+    const part = (c, one, many) => `${c} ${c === 1 ? one : many}`;
+    if (!v) return part(i, "image", "images");
+    if (!i) return part(v, "video", "videos");
+    return `${part(i, "image", "images")} and ${part(v, "video", "videos")}`;
+  }
+  function updateBar() {
+    const n = items.length;
+    const anyVideo = items.some((x) => x.kind === "video");
+    els.count.textContent = countLabel();
+    els.dlAll.textContent = n > 1 ? (anyVideo ? `Download all ${n}` : `Download all ${n} as ZIP`) : "Download all";
+    els.dlAll.disabled = busy || n === 0;
+    els.dlOne.disabled = busy || !(items[current] && items[current].ready);
+    els.clearAll.disabled = busy || n === 0;
+    els.prev.disabled = current <= 0;
+    els.next.disabled = current < 0 || current >= n - 1;
+    const it = items[current];
+    els.dlOne.textContent = it && it.kind === "video" ? "Download this video" : "Download this image";
+    if (it) {
+      els.meta.textContent = "";
+      const name = document.createElement("span");
+      name.textContent = it.name;
+      els.meta.appendChild(name);
+      if (it.ready) {
+        const d = document.createElement("span");
+        d.className = "dims";
+        d.textContent = it.kind === "video"
+          ? `${it.w} \u00D7 ${it.h} \u00B7 ${fmtTime(it.duration)}`
+          : `${it.w} \u00D7 ${it.h}`;
+        els.meta.appendChild(d);
+      }
+    } else {
+      els.meta.innerHTML = "&nbsp;";
+    }
+    const showScrub = !!(it && it.ready && it.kind === "video" && it.duration);
+    els.scrub.hidden = !showScrub;
+    if (showScrub) {
+      els.scrubRange.value = String(Math.round((it.time / it.duration) * 1000));
+      els.scrubTime.textContent = `${fmtTime(it.time)} / ${fmtTime(it.duration)}`;
+    }
+    const ex = it ? it.name : "photo.jpg";
+    const ext = it && it.kind === "video" ? "mp4" : extFor(outTypeFor(it));
+    els.nameExample.textContent = `Example: ${ex.replace(/\.[^.]+$/, "")}${cleanSuffix()}.${ext}`;
+  }
+  function updatePosUI() {
+    const tiled = S.style === "tiled";
+    els.posBlock.hidden = tiled;
+    els.gapField.hidden = !tiled;
+    preview.classList.toggle("nodrag", tiled);
+    const style = STYLES[S.style] || STYLES.badge;
+    els.bgLabel.textContent = style.bgName;
+    els.outlineLabel.textContent = style.outlineName;
+    els.qualityField.hidden = S.format === "image/png";
+    els.videoField.hidden = !items.some((x) => x.kind === "video");
+    const pos = effectivePos(items[current]);
+    [...els.posgrid.children].forEach((b) => b.classList.toggle("on", b.dataset.anchor === pos.anchor));
+    [...els.posgrid.children].forEach((b) => b.setAttribute("aria-pressed", b.dataset.anchor === pos.anchor ? "true" : "false"));
+    const it = items[current];
+    els.resetPos.hidden = !S.perImage;
+    els.resetPos.disabled = !(S.perImage && it && it.pos);
+  }
+  function syncControls() {
+    document.querySelectorAll("[data-key]").forEach((el) => {
+      const v = S[el.dataset.key];
+      if (el.type === "radio") el.checked = el.value === v;
+      else if (el.type === "checkbox") el.checked = !!v;
+      else el.value = v;
+    });
+    updateOutputs();
+    updatePosUI();
+    updateBar();
+  }
+  function updateOutputs() {
+    const fmt = {
+      size: (v) => `${v}%`, opacity: (v) => `${v}%`, rotation: (v) => `${v}\u00B0`,
+      margin: (v) => `${v}%`, lineHeight: (v) => Number(v).toFixed(2), quality: (v) => `${v}%`, gap: (v) => `${v}%`
+    };
+    document.querySelectorAll("output[data-for]").forEach((o) => {
+      const k = o.dataset.for;
+      o.textContent = fmt[k] ? fmt[k](S[k]) : S[k];
+    });
+  }
+
+  /* ---------- Controls ---------- */
+  ANCHORS.forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.anchor = key;
+    b.setAttribute("aria-label", label);
+    b.title = label;
+    b.addEventListener("click", () => setPos({ anchor: key, cx: 0.5, cy: 0.5 }));
+    els.posgrid.appendChild(b);
+  });
+
+  function onControl(el) {
+    const k = el.dataset.key;
+    if (el.type === "radio") { if (!el.checked) return; S[k] = el.value; }
+    else if (el.type === "checkbox") S[k] = el.checked;
+    else if (el.type === "range") S[k] = parseFloat(el.value);
+    else S[k] = el.value;
+    updateOutputs();
+    if (["style", "perImage", "format"].includes(k)) { updatePosUI(); renderStrip(); }
+    if (["format", "suffix"].includes(k)) updateBar();
+    if (["font", "bold", "text", "uppercase"].includes(k)) ensureFont().then(scheduleRender);
+    scheduleRender();
+  }
+  document.querySelectorAll("[data-key]").forEach((el) => {
+    el.addEventListener("input", () => onControl(el));
+    if (el.tagName === "SELECT" || el.type === "radio" || el.type === "checkbox") {
+      el.addEventListener("change", () => onControl(el));
+    }
+  });
+
+  function setPos(p) {
+    if (S.style === "tiled") return;
+    const it = items[current];
+    if (S.perImage && it) {
+      it.pos = { ...p };
+    } else {
+      S.anchor = p.anchor;
+      if (p.anchor === "custom") { S.cx = p.cx; S.cy = p.cy; }
+    }
+    updatePosUI();
+    if (S.perImage) renderStrip();
+    scheduleRender();
+  }
+
+  els.resetPos.addEventListener("click", () => {
+    const it = items[current];
+    if (it) { it.pos = null; updatePosUI(); renderStrip(); scheduleRender(); }
+  });
+  $("#resetAll").addEventListener("click", () => {
+    S = { ...DEFAULTS };
+    items.forEach((it) => (it.pos = null));
+    syncControls();
+    renderStrip();
+    ensureFont().then(scheduleRender);
+    toast("Settings reset.");
+  });
+
+  /* Drag on preview */
+  let dragging = false;
+  function pointToPos(e) {
+    const r = preview.getBoundingClientRect();
+    const cx = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const cy = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    setPos({ anchor: "custom", cx, cy });
+  }
+  preview.addEventListener("pointerdown", (e) => {
+    if (S.style === "tiled" || !items[current]) return;
+    dragging = true;
+    preview.classList.add("dragging");
+    preview.setPointerCapture(e.pointerId);
+    pointToPos(e);
+  });
+  preview.addEventListener("pointermove", (e) => { if (dragging) pointToPos(e); });
+  const endDrag = () => { dragging = false; preview.classList.remove("dragging"); };
+  preview.addEventListener("pointerup", endDrag);
+  preview.addEventListener("pointercancel", endDrag);
+
+  /* Buttons */
+  $("#addBtn").addEventListener("click", () => fileInput.click());
+  $("#emptyAdd").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInput.value = ""; });
+  els.prev.addEventListener("click", () => select(current - 1));
+  els.next.addEventListener("click", () => select(current + 1));
+  els.clearAll.addEventListener("click", () => {
+    if (confirm(`Remove all ${items.length} files from the list?`)) clearAll();
+  });
+  els.dlOne.addEventListener("click", downloadOne);
+  els.dlAll.addEventListener("click", downloadAll);
+  els.cancel.addEventListener("click", cancelJob);
+  els.workStop.addEventListener("click", cancelJob);
+  els.scrubRange.addEventListener("input", () => {
+    const it = items[current];
+    if (!it || it.kind !== "video" || !it.duration) return;
+    const t = (parseFloat(els.scrubRange.value) / 1000) * it.duration;
+    els.scrubTime.textContent = `${fmtTime(t)} / ${fmtTime(it.duration)}`;
+    pendingSeek = t;
+    pumpSeek(it);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    const tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
+    if (e.key === "ArrowLeft") select(current - 1);
+    if (e.key === "ArrowRight") select(current + 1);
+  });
+
+  /* Drag and drop files */
+  let dragDepth = 0;
+  const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("Files");
+  window.addEventListener("dragenter", (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; document.body.classList.add("dropping"); });
+  window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove("dropping"); });
+  window.addEventListener("drop", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    document.body.classList.remove("dropping");
+    addFiles(e.dataTransfer.files);
+  });
+
+  /* ---------- Export ---------- */
+  function outTypeFor(it) {
+    if (it && it.kind === "video") return "video/mp4";
+    if (S.format !== "original") return S.format;
+    const ok = ["image/jpeg", "image/png", "image/webp"];
+    return it && ok.includes(it.type) ? it.type : it ? "image/png" : "image/jpeg";
+  }
+  function extFor(type) {
+    return { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/mp4": "mp4" }[type] || "png";
+  }
+  function cleanSuffix() {
+    return (S.suffix || "").replace(/[\\/:*?"<>|]/g, "");
+  }
+  async function renderFull(it) {
+    await ensureFont();
+    const c = document.createElement("canvas");
+    c.width = it.w;
+    c.height = it.h;
+    const ctx = c.getContext("2d");
+    const type = outTypeFor(it);
+    if (type === "image/jpeg") { ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, it.w, it.h); }
+    ctx.drawImage(it.img, 0, 0, it.w, it.h);
+    drawWatermark(ctx, it.w, it.h, effectivePos(it));
+    const blob = await new Promise((res, rej) =>
+      c.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), type, S.quality / 100)
+    );
+    c.width = 0; c.height = 0;
+    const base = it.name.replace(/\.[^.]+$/, "");
+    return { blob, name: `${base}${cleanSuffix()}.${extFor(blob.type || type)}` };
+  }
+  /* ---------- Video engine ----------
+     ffmpeg.wasm runs in a worker. The multi-threaded core needs SharedArrayBuffer,
+     which only exists when the page is served cross-origin isolated (see _headers).
+     Without that we fall back to the single-threaded core: same output, slower. */
+  /* ffmpeg.js is served from our own origin on purpose. It spawns its own
+     worker from a sibling file (814.ffmpeg.js), and a Worker cannot be created
+     from another origin - loading this from a CDN fails with a SecurityError.
+     Both files are tiny; only the 32 MB core comes from the CDN, and that is
+     fetched with fetch() and turned into a blob URL, which is allowed. */
+  const FF_MAIN = "vendor/ffmpeg/ffmpeg.js";
+  const FF_CORE = (mt) => `https://cdn.jsdelivr.net/npm/@ffmpeg/${mt ? "core-mt" : "core"}@0.12.10/dist/umd/`;
+  let ff = null;
+  let ffLoading = null;
+  let ffMT = false;
+
+  /* Nothing here may hang: a stalled CDN has to end in a message, not a
+     spinner that never stops. */
+  function withTimeout(p, ms, what) {
+    let timer;
+    return Promise.race([
+      p.finally(() => clearTimeout(timer)),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error(what + " timed out")), ms); })
+    ]);
+  }
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const el = document.createElement("script");
+      el.crossOrigin = "anonymous";
+      el.onload = () => res();
+      el.onerror = () => rej(new Error("script failed"));
+      el.src = src;
+      document.head.appendChild(el);
+    });
+  }
+  async function blobURL(url, type, onBytes) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("fetch failed");
+    if (!onBytes || !r.body || !r.body.getReader) {
+      return URL.createObjectURL(new Blob([await r.arrayBuffer()], { type }));
+    }
+    const total = Number(r.headers.get("content-length")) || 0;
+    const reader = r.body.getReader();
+    const chunks = [];
+    let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      got += value.length;
+      onBytes(got, total);
+    }
+    return URL.createObjectURL(new Blob(chunks, { type }));
+  }
+  function ensureEngine() {
+    if (ff) return Promise.resolve(ff);
+    if (location.protocol === "file:") return Promise.reject(new Error("videos need a served page"));
+    if (ffLoading) return ffLoading;
+    ffLoading = withTimeout((async () => {
+      if (!busy) setJob("Getting the video tool ready\u2026");
+      if (!window.FFmpegWASM) await withTimeout(loadScript(FF_MAIN), 30000, "the video tool");
+      const mt = !!self.crossOriginIsolated;
+      const base = FF_CORE(mt);
+      /* The core is about 32 MB and only downloads once, but the first time it
+         is the longest wait in the whole tool, so it has to be visible. */
+      const onBytes = (got, total) => {
+        const mb = (b) => (b / 1048576).toFixed(1);
+        if (total) {
+          workPct(got / total);
+          workNote(`${mb(got)} MB of ${mb(total)} MB`);
+          if (!busy) setJob(`Getting the video tool ready \u00B7 ${Math.round((got / total) * 100)}%`);
+        } else {
+          workNote(`${mb(got)} MB downloaded`);
+        }
+      };
+      const opts = {
+        coreURL: await blobURL(base + "ffmpeg-core.js", "text/javascript"),
+        wasmURL: await blobURL(base + "ffmpeg-core.wasm", "application/wasm", onBytes)
+      };
+      workNote("");
+      workPct(null);
+      if (mt) opts.workerURL = await blobURL(base + "ffmpeg-core.worker.js", "text/javascript");
+      const inst = new window.FFmpegWASM.FFmpeg();
+      await inst.load(opts);
+      ff = inst;
+      ffMT = mt;
+      if (!busy) setJob("");
+      return ff;
+    })(), 300000, "the video tool");
+    ffLoading.catch(() => { ffLoading = null; if (!busy) setJob(""); });
+    return ffLoading;
+  }
+  function killEngine() {
+    try { if (ff) ff.terminate(); } catch (e) {}
+    ff = null;
+    ffLoading = null;
+  }
+  async function engineReady() {
+    if (location.protocol === "file:") {
+      toast("Videos need this page opened from a web address. Opened straight from a file on the computer, only pictures can be watermarked.");
+      return false;
+    }
+    try {
+      await ensureEngine();
+      return true;
+    } catch (e) {
+      console.error("[watermark] the video engine failed to load:", e);
+      toast("The video tool could not load. Check the internet connection, then reload the page.");
+      return false;
+    }
+  }
+
+  /* Output size. H.264 needs even numbers on both sides. */
+  function targetDims(it) {
+    const cap = S.videoMax === "original" ? 0 : parseInt(S.videoMax, 10);
+    let w = it.w;
+    let h = it.h;
+    if (cap && Math.max(w, h) > cap) {
+      const k = cap / Math.max(w, h);
+      w = Math.round(w * k);
+      h = Math.round(h * k);
+    }
+    return { w: Math.max(2, w - (w % 2)), h: Math.max(2, h - (h % 2)) };
+  }
+
+  /* One transparent PNG the size of the whole frame, painted by the same
+     drawWatermark() the images use, so video and image output always match. */
+  async function watermarkPNG(it, W, H) {
+    await ensureFont();
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext("2d");
+    drawWatermark(ctx, W, H, effectivePos(it));
+    const blob = await new Promise((res, rej) =>
+      c.toBlob((b) => (b ? res(b) : rej(new Error("png"))), "image/png")
+    );
+    c.width = 0;
+    c.height = 0;
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+
+  async function renderVideo(it, onProgress, ticketRef) {
+    const engine = await ensureEngine();
+    const { w: W, h: H } = targetDims(it);
+    const png = await watermarkPNG(it, W, H);
+    const m = /\.[a-z0-9]+$/i.exec(it.name);
+    const inName = "input" + (m ? m[0].toLowerCase() : ".mp4");
+    const dur = it.duration || 0;
+    const onProg = (e) => {
+      const t = e && typeof e.time === "number" ? e.time / 1e6 : 0;
+      let f = dur && t ? t / dur : (e && e.progress) || 0;
+      if (!isFinite(f)) f = 0;
+      onProgress(Math.max(0, Math.min(1, f)));
+    };
+    const run = async (args) => {
+      const code = await engine.exec(args);
+      if (typeof code === "number" && code !== 0) throw new Error("ffmpeg exit " + code);
+    };
+    engine.on("progress", onProg);
+    try {
+      await engine.writeFile(inName, new Uint8Array(await it.file.arrayBuffer()));
+      await engine.writeFile("wm.png", png);
+      const filter = `[0:v]scale=${W}:${H}:flags=bicubic[s];[s][1:v]overlay=0:0:format=auto,format=yuv420p[v]`;
+      const args = ["-i", inName, "-i", "wm.png", "-filter_complex", filter,
+        "-map", "[v]", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-movflags", "+faststart"];
+      if (ffMT) args.push("-threads", "4");
+      const canCopyAudio = /mp4|quicktime|m4v/i.test(it.type || "") || /\.(mp4|m4v|mov)$/i.test(it.name);
+      let done = false;
+      if (canCopyAudio) {
+        try {
+          await run([...args, "-c:a", "copy", "out.mp4"]);
+          done = true;
+        } catch (e) {
+          if (ticketRef.cancelled) throw e;
+        }
+      }
+      if (!done) await run([...args, "-c:a", "aac", "-b:a", "128k", "out.mp4"]);
+      const data = await engine.readFile("out.mp4");
+      const blob = new Blob([data], { type: "video/mp4" });
+      if (!blob.size) throw new Error("empty output");
+      return { blob, name: `${it.name.replace(/\.[^.]+$/, "")}${cleanSuffix()}.mp4` };
+    } finally {
+      if (!ticketRef.cancelled) {
+        try { if (engine.off) engine.off("progress", onProg); } catch (e) {}
+        for (const f of [inName, "wm.png", "out.mp4"]) {
+          try { await engine.deleteFile(f); } catch (e) {}
+        }
+      }
+    }
+  }
+
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  let ticket = null;
+
+  /* One place that owns "what is happening right now". Everything that takes
+     time reports into it, and it paints the panel, the thin top bar and the
+     label in the header from the same state. */
+  let work = null;
+  let workTimer = 0;
+  let workReveal = 0;
+
+  function startWork(count) {
+    work = { count, index: 0, title: "Working", pct: null, at: Date.now(), note: "" };
+    els.workStop.disabled = false;
+    clearInterval(workTimer);
+    workTimer = setInterval(drawWork, 500);
+    // A fast job should not make the panel flash, so give it a moment first.
+    if (els.working.hidden) {
+      clearTimeout(workReveal);
+      workReveal = setTimeout(() => { if (work) els.working.hidden = false; }, 400);
+    }
+    drawWork();
+  }
+  function workItem(index, title) {
+    if (!work) return;
+    work.index = index;
+    work.title = title;
+    work.pct = null;
+    work.note = "";
+    work.at = Date.now();
+    drawWork();
+  }
+  function workPct(pct) {
+    if (!work) return;
+    work.pct = pct == null ? null : Math.max(0, Math.min(1, pct));
+    drawWork();
+  }
+  function workNote(text) {
+    if (!work) return;
+    work.note = text || "";
+    drawWork();
+  }
+  function stopWork() {
+    clearInterval(workTimer);
+    clearTimeout(workReveal);
+    workTimer = 0;
+    workReveal = 0;
+    work = null;
+    els.working.hidden = true;
+  }
+  function etaText(elapsed, pct) {
+    const remain = (elapsed * (1 - pct)) / pct;
+    if (!isFinite(remain) || remain < 5) return "almost done";
+    if (remain < 60) return `about ${Math.max(5, Math.round(remain / 5) * 5)} seconds left`;
+    const m = Math.round(remain / 60);
+    return `about ${m} minute${m > 1 ? "s" : ""} left`;
+  }
+  function drawWork() {
+    if (!work) return;
+    const known = work.pct != null;
+    const elapsed = (Date.now() - work.at) / 1000;
+    els.workTitle.textContent = work.title;
+    els.workTitle.title = work.title;
+    els.workPct.textContent = known ? `${Math.round(work.pct * 100)}%` : "\u2026";
+    els.workBar.classList.toggle("pulse", !known);
+    els.workBar.style.width = known ? `${work.pct * 100}%` : "";
+
+    /* Never leave it looking frozen: without a percentage, show the clock. */
+    let sub = work.note;
+    if (!sub) {
+      if (known && work.pct > 0.02) sub = etaText(elapsed, work.pct);
+      else if (elapsed > 2) sub = `${Math.round(elapsed)} seconds so far`;
+    }
+    els.workSub.textContent = sub;
+
+    const many = work.count > 1;
+    els.workOverall.hidden = !many;
+    const overall = (work.index + (known ? work.pct : 0)) / Math.max(1, work.count);
+    if (many) {
+      els.workOverallText.textContent = `File ${work.index + 1} of ${work.count}`;
+      els.workOverallBar.style.width = `${overall * 100}%`;
+    }
+    setProgress(many ? overall : known ? work.pct : 0);
+    setJob(known ? `${work.title} \u00B7 ${Math.round(work.pct * 100)}%` : work.title);
+  }
+
+  function cancelJob() {
+    if (!ticket || ticket.cancelled) return;
+    ticket.cancelled = true;
+    els.workStop.disabled = true;
+    if (work) {
+      work.title = "Stopping\u2026";
+      work.pct = null;
+      work.note = "";
+      drawWork();
+    }
+    setJob("Stopping\u2026");
+    killEngine();
+  }
+
+  function setBusy(on) {
+    busy = on;
+    els.progress.hidden = !on;
+    els.cancel.hidden = !on;
+    if (!on) {
+      stopWork();
+      setProgress(0);
+      setJob("");
+      ticket = null;
+    }
+    updateBar();
+  }
+  function setProgress(f) {
+    els.progress.firstElementChild.style.width = `${Math.round(f * 100)}%`;
+  }
+  function setJob(text) {
+    els.job.textContent = text || "";
+    els.job.hidden = !text;
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const ZIP_LIMIT = 600 * 1024 * 1024;
+
+  function estimateBytes(it) {
+    return it.kind === "video" ? it.file.size : Math.max(60000, it.w * it.h * 0.45);
+  }
+  function dedupe(used, name) {
+    const key = name.toLowerCase();
+    const seen = used.get(key) || 0;
+    used.set(key, seen + 1);
+    return seen ? name.replace(/(\.[^.]+)$/, `-${seen + 1}$1`) : name;
+  }
+  async function writeToFolder(dir, name, blob) {
+    const handle = await dir.getFileHandle(name, { create: true });
+    const w = await handle.createWritable();
+    await w.write(blob);
+    await w.close();
+  }
+  function stamp() {
+    const d = new Date();
+    const p = (v) => String(v).padStart(2, "0");
+    return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+  }
+  function failMessage(it) {
+    return it.kind === "video"
+      ? `${it.name} could not be converted. It may use a video format the browser cannot read \u2014 save it as an MP4 and try again.`
+      : `${it.name} could not be saved. It may be too large for the browser.`;
+  }
+  async function renderItem(it, onProgress, ticketRef) {
+    return it.kind === "video" ? renderVideo(it, onProgress, ticketRef) : renderFull(it);
+  }
+
+  async function downloadOne() {
+    const it = items[current];
+    if (!it || !it.ready || busy) return;
+    ticket = { cancelled: false };
+    const mine = ticket;
+    setBusy(true);
+    startWork(1);
+    try {
+      if (it.kind === "video") {
+        workItem(0, "Getting the video tool ready");
+        if (!(await engineReady())) return;
+        if (mine.cancelled) { toast("Stopped."); return; }
+      }
+      workItem(0, `Watermarking ${it.name}`);
+      const r = await renderItem(it, workPct, mine);
+      if (mine.cancelled) { toast("Stopped."); return; }
+      saveBlob(r.blob, r.name);
+      toast(`Downloaded ${r.name}.`);
+    } catch (err) {
+      if (mine.cancelled) toast("Stopped.");
+      else toast(failMessage(it));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadAll() {
+    const ready = items.filter((x) => x.ready);
+    if (!ready.length || busy) return;
+    const videos = ready.filter((x) => x.kind === "video");
+    const est = ready.reduce((a, x) => a + estimateBytes(x), 0);
+
+    /* Videos can add up to gigabytes, which is more than a ZIP can be built in
+       memory. When there are any, write straight into a folder he picks. */
+    let dir = null;
+    if (videos.length && ready.length > 1 && window.showDirectoryPicker) {
+      try {
+        dir = await window.showDirectoryPicker({ mode: "readwrite", id: "watermark-output" });
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+        dir = null;
+      }
+    }
+    ticket = { cancelled: false };
+    const mine = ticket;
+    setBusy(true);
+    startWork(ready.length);
+    const failed = [];
+    const used = new Map();
+    try {
+      if (videos.length) {
+        workItem(0, "Getting the video tool ready");
+        if (!(await engineReady())) return;
+        if (mine.cancelled) { toast("Stopped."); return; }
+      }
+      if (ready.length === 1 && !dir) {
+        const it = ready[0];
+        workItem(0, `Watermarking ${it.name}`);
+        const r = await renderItem(it, workPct, mine);
+        if (mine.cancelled) { toast("Stopped."); return; }
+        saveBlob(r.blob, r.name);
+        toast(`Downloaded ${r.name}.`);
+        return;
+      }
+
+      const useZip = !dir && !!window.JSZip && (!videos.length || est <= ZIP_LIMIT);
+      const zip = useZip ? new JSZip() : null;
+      const singles = [];
+      if (!dir && !useZip) {
+        toast(window.JSZip
+          ? "That is a lot of video for one ZIP, so the files will be saved one by one."
+          : "The ZIP tool could not load, so files will be saved one by one. Check your internet connection to get a ZIP.");
+      }
+
+      for (let i = 0; i < ready.length; i++) {
+        if (mine.cancelled) break;
+        const it = ready[i];
+        workItem(i, `Watermarking ${it.name}`);
+        try {
+          const r = await renderItem(it, workPct, mine);
+          if (mine.cancelled) break;
+          const name = dedupe(used, r.name);
+          if (dir) await writeToFolder(dir, name, r.blob);
+          else if (zip) zip.file(name, r.blob);
+          else singles.push({ blob: r.blob, name });
+        } catch (e) {
+          if (mine.cancelled) break;
+          failed.push(it.name);
+        }
+        workPct(1);
+        await sleep(0);
+      }
+
+      if (mine.cancelled) {
+        toast(dir
+          ? "Stopped. Whatever finished is already in the folder you chose."
+          : "Stopped. Nothing was saved.");
+        return;
+      }
+
+      const done = ready.length - failed.length;
+      const skipped = failed.length ? ` Skipped: ${failed.join(", ")}.` : "";
+      if (dir) {
+        toast(`Saved ${done} files to the folder you chose.${skipped}`);
+      } else if (zip) {
+        startWork(1);
+        workItem(0, "Packing the ZIP");
+        const blob = await zip.generateAsync(
+          { type: "blob", compression: "STORE" },
+          (m) => workPct(m.percent / 100)
+        );
+        saveBlob(blob, `watermarked-${stamp()}.zip`);
+        toast(`Downloaded ${done} files as a ZIP.${skipped}`);
+      } else {
+        for (const f of singles) {
+          saveBlob(f.blob, f.name);
+          await sleep(350);
+        }
+        toast(`Saved ${done} files.${skipped}`);
+      }
+    } catch (err) {
+      if (!mine.cancelled) toast("The download could not be finished. Try fewer files at a time.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ---------- Toast ---------- */
+  let toastTimer = 0;
+  function toast(msg) {
+    els.toast.textContent = msg;
+    els.toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.remove("show"), 3800);
+  }
+
+  /* ---------- Start ---------- */
+  syncControls();
+  refresh();
+  ensureFont().then(scheduleRender);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleRender);
+  window.addEventListener("resize", scheduleRender);
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "Batch watermark",
+  "short_name": "Watermark",
+  "description": "Add a text watermark to many photos and videos at once.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#E9EDF1",
+  "theme_color": "#1673AE",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
