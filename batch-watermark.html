@@ -1451,11 +1451,34 @@ body.dropping .drop-cover{display:flex}
     const m = /\.[a-z0-9]+$/i.exec(it.name);
     const inName = "input" + (m ? m[0].toLowerCase() : ".mp4");
     const dur = it.duration || 0;
+    /* ffmpeg.wasm's own 'progress' event is documented as accurate only when
+       input and output have the same length - with a filter graph (which
+       this always uses, for the overlay) that's often not true, and in
+       practice it can just never fire a usable value, leaving the bar stuck.
+       The reliable source or a real progress bar is the plain text ffmpeg
+       itself prints as it works, e.g. "...time=00:00:04.83...", the same
+       thing every ffmpeg-based progress bar has always parsed - so read that
+       from the 'log' event and prefer it. Either source can occasionally be
+       stale, so only ever move the bar forward, never backward. */
+    let bestFrac = 0;
+    const report = (f) => {
+      if (!isFinite(f) || f <= bestFrac) return;
+      bestFrac = Math.min(1, f);
+      onProgress(bestFrac);
+    };
     const onProg = (e) => {
-      const t = e && typeof e.time === "number" ? e.time / 1e6 : 0;
-      let f = dur && t ? t / dur : (e && e.progress) || 0;
-      if (!isFinite(f)) f = 0;
-      onProgress(Math.max(0, Math.min(1, f)));
+      const t = e && typeof e.time === "number" ? e.time / 1e6 : NaN;
+      const f = dur && isFinite(t) && t > 0 ? t / dur
+        : e && typeof e.progress === "number" ? e.progress : NaN;
+      report(f);
+    };
+    const TIME_RE = /\btime=(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/;
+    const onLog = (e) => {
+      if (!dur || !e || typeof e.message !== "string") return;
+      const m = TIME_RE.exec(e.message);
+      if (!m) return;
+      const secs = Number(m[1]) * 3600 + Number(m[2]) * 60 + parseFloat(m[3]);
+      report(secs / dur);
     };
     /* An encode that never posts back from the worker (a malformed filter,
        for instance) must not hang forever - bound each attempt, and if it
@@ -1465,6 +1488,7 @@ body.dropping .drop-cover{display:flex}
        means waiting through a second identical timeout for nothing. */
     const ENCODE_TIMEOUT_MS = 4 * 60 * 1000;
     const run = async (args) => {
+      bestFrac = 0; // a fresh exec() is a fresh encode from t=0, even on a retry
       let code;
       try {
         code = await withTimeout(engine.exec(args), ENCODE_TIMEOUT_MS, "the video encode");
@@ -1475,6 +1499,7 @@ body.dropping .drop-cover{display:flex}
       if (typeof code === "number" && code !== 0) throw new Error("ffmpeg exit " + code);
     };
     engine.on("progress", onProg);
+    engine.on("log", onLog);
     try {
       await engine.writeFile(inName, new Uint8Array(await it.file.arrayBuffer()));
       await engine.writeFile("wm.png", moving ? sprite.data : png);
@@ -1496,6 +1521,10 @@ body.dropping .drop-cover{display:flex}
         } catch (e) {
           if (ticketRef.cancelled) throw e;
           if (/timed out/.test(e.message || "")) timedOut = true;
+          // Falling back means the whole encode runs a second time - which is
+          // most of the total wait, since video encoding (not audio) is what
+          // takes the time - so this is worth knowing about, not just eating.
+          console.warn(`[watermark] ${it.name}: audio stream copy failed, re-encoding audio and running the full encode again`, e);
         }
       }
       if (!done && timedOut) throw new Error("the video encode timed out");
@@ -1507,6 +1536,7 @@ body.dropping .drop-cover{display:flex}
     } finally {
       if (!ticketRef.cancelled) {
         try { if (engine.off) engine.off("progress", onProg); } catch (e) {}
+        try { if (engine.off) engine.off("log", onLog); } catch (e) {}
         for (const f of [inName, "wm.png", "out.mp4"]) {
           try { await engine.deleteFile(f); } catch (e) {}
         }
