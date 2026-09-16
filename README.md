@@ -21,6 +21,7 @@ Watermarking a handful of files by hand is fine. Watermarking dozens of them, co
 - **Progress and cancel** for long video jobs, per file and overall
 - **Smart downloads**: a ZIP for small batches, straight-to-folder saving for large ones, so a big video batch can't crash the tab
 - **Installable** as a lightweight app (PWA): pin it to the taskbar, works offline after first load
+- **Remembers your settings** in this browser, so a returning user doesn't have to rebuild the watermark from scratch on every visit
 
 ## How it works
 

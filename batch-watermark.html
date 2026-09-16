@@ -349,6 +349,7 @@ body.dropping .drop-cover{display:flex}
 
     <div class="panel-foot">
       <button class="btn quiet" id="resetAll" type="button">Reset all settings</button>
+      <p class="hint">Your settings are remembered in this browser, so next time everything is already set up. Nothing is sent anywhere — it stays on this computer, the same as your photos and videos. Resetting also clears what's remembered.</p>
     </div>
   </aside>
 
@@ -430,7 +431,34 @@ body.dropping .drop-cover{display:flex}
     motionSpeed: 6,
     suffix: "_wm"
   };
-  let S = { ...DEFAULTS };
+  /* Settings persist in this browser only (localStorage) - never sent
+     anywhere, same promise as the files themselves. Restoring only known
+     DEFAULTS keys means an older or corrupted saved blob can't inject
+     anything unexpected into S, and a future version that drops a setting
+     won't choke on old leftovers either. */
+  const SETTINGS_KEY = "batchWatermark.settings.v1";
+  function loadSavedSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return {};
+      const saved = JSON.parse(raw);
+      if (!saved || typeof saved !== "object") return {};
+      const clean = {};
+      for (const k of Object.keys(DEFAULTS)) if (k in saved) clean[k] = saved[k];
+      return clean;
+    } catch (e) {
+      return {};
+    }
+  }
+  let saveTimer = 0;
+  function persistSettings() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(S)); } catch (e) {}
+    }, 300);
+  }
+
+  let S = { ...DEFAULTS, ...loadSavedSettings() };
 
   const FONTS = {
     Oswald: '"Oswald", "Arial Narrow", sans-serif',
@@ -1111,6 +1139,7 @@ body.dropping .drop-cover{display:flex}
     if (["format", "suffix"].includes(k)) updateBar();
     if (["font", "bold", "text", "uppercase"].includes(k)) ensureFont().then(scheduleRender);
     scheduleRender();
+    persistSettings();
   }
   document.querySelectorAll("[data-key]").forEach((el) => {
     el.addEventListener("input", () => onControl(el));
@@ -1131,6 +1160,7 @@ body.dropping .drop-cover{display:flex}
     updatePosUI();
     if (S.perImage) renderStrip();
     scheduleRender();
+    persistSettings();
   }
 
   els.resetPos.addEventListener("click", () => {
@@ -1143,6 +1173,7 @@ body.dropping .drop-cover{display:flex}
     syncControls();
     renderStrip();
     ensureFont().then(scheduleRender);
+    persistSettings();
     toast("Settings reset.");
   });
 
