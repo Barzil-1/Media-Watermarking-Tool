@@ -1457,8 +1457,21 @@ body.dropping .drop-cover{display:flex}
       if (!isFinite(f)) f = 0;
       onProgress(Math.max(0, Math.min(1, f)));
     };
+    /* An encode that never posts back from the worker (a malformed filter,
+       for instance) must not hang forever - bound each attempt, and if it
+       does time out, kill the worker so it can't poison the next attempt or
+       the next video, and skip the audio-codec retry: a stuck video filter
+       won't be fixed by trying a different audio codec, so retrying just
+       means waiting through a second identical timeout for nothing. */
+    const ENCODE_TIMEOUT_MS = 4 * 60 * 1000;
     const run = async (args) => {
-      const code = await engine.exec(args);
+      let code;
+      try {
+        code = await withTimeout(engine.exec(args), ENCODE_TIMEOUT_MS, "the video encode");
+      } catch (e) {
+        killEngine();
+        throw e;
+      }
       if (typeof code === "number" && code !== 0) throw new Error("ffmpeg exit " + code);
     };
     engine.on("progress", onProg);
@@ -1475,14 +1488,17 @@ body.dropping .drop-cover{display:flex}
       if (ffMT) args.push("-threads", "4");
       const canCopyAudio = /mp4|quicktime|m4v/i.test(it.type || "") || /\.(mp4|m4v|mov)$/i.test(it.name);
       let done = false;
+      let timedOut = false;
       if (canCopyAudio) {
         try {
           await run([...args, "-c:a", "copy", "out.mp4"]);
           done = true;
         } catch (e) {
           if (ticketRef.cancelled) throw e;
+          if (/timed out/.test(e.message || "")) timedOut = true;
         }
       }
+      if (!done && timedOut) throw new Error("the video encode timed out");
       if (!done) await run([...args, "-c:a", "aac", "-b:a", "128k", "out.mp4"]);
       const data = await engine.readFile("out.mp4");
       const blob = new Blob([data], { type: "video/mp4" });
@@ -1649,7 +1665,10 @@ body.dropping .drop-cover{display:flex}
     const p = (v) => String(v).padStart(2, "0");
     return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
   }
-  function failMessage(it) {
+  function failMessage(it, err) {
+    if (it.kind === "video" && /timed out/.test((err && err.message) || "")) {
+      return `${it.name} took too long to convert and was stopped. Try a shorter clip, a smaller resolution (see Video size), or turn off the moving watermark.`;
+    }
     return it.kind === "video"
       ? `${it.name} could not be converted. It may use a video format the browser cannot read \u2014 save it as an MP4 and try again.`
       : `${it.name} could not be saved. It may be too large for the browser.`;
@@ -1678,7 +1697,7 @@ body.dropping .drop-cover{display:flex}
       toast(`Downloaded ${r.name}.`);
     } catch (err) {
       if (mine.cancelled) toast("Stopped.");
-      else toast(failMessage(it));
+      else { console.error("[watermark] export failed:", err); toast(failMessage(it, err)); }
     } finally {
       setBusy(false);
     }
@@ -1745,6 +1764,7 @@ body.dropping .drop-cover{display:flex}
           else singles.push({ blob: r.blob, name });
         } catch (e) {
           if (mine.cancelled) break;
+          console.error(`[watermark] export failed for ${it.name}:`, e);
           failed.push(it.name);
         }
         workPct(1);
