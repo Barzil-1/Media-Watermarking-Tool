@@ -12,6 +12,7 @@
 | `vendor/ffmpeg/` | The ffmpeg.wasm loader and its worker chunk. Must be same-origin — see below. |
 | `serve.mjs` | Local test server with the right headers. Development only. |
 | `build.mjs` | Assembles `dist/` — the exact files to deploy. Development only. |
+| `wrangler.json` | Tells Cloudflare's Git-connected deploy what to serve. Only used by Option B below. |
 
 All five support files are optional in the sense that the tool still runs without
 them. What you lose without each one is spelled out below.
@@ -87,12 +88,34 @@ Simple, but manual every time.
 
 ### Option B — connected to GitHub (recommended once the repo exists)
 
-1. **Workers & Pages → Create → Pages → Connect to Git**, pick this repo, branch `main`.
-2. Framework preset: **None**. Build command: `node build.mjs`. Build output
-   directory: `dist`.
+As of late 2026, Cloudflare's Git-connected setup is a Workers-style flow, not
+the older "build output directory" field — it deploys with Wrangler, and
+Wrangler needs a config file. `wrangler.json` at the repo root already has it:
+
+```json
+{
+  "name": "media-watermarking-tool",
+  "compatibility_date": "2026-09-16",
+  "assets": { "directory": "./dist/" }
+}
+```
+
+Setup:
+
+1. **Workers & Pages → Create → Pages → Connect to Git**, pick this repo, branch
+   `main`.
+2. **Build command:** `node build.mjs`. **Deploy command:** leave it as the
+   default `npx wrangler deploy` — `wrangler.json` tells it what to serve, so
+   no `--assets` flag is needed. Same for the non-production branch deploy
+   command (`npx wrangler versions upload`). Leave **Path** blank — despite the
+   label, that field is a monorepo root, not the output directory.
 3. Deploy. Every `git push` to `main` now redeploys automatically — no manual
    drag-and-drop step. `build.mjs` needs no `npm install`; it only touches the
    filesystem, so the default Node version in Cloudflare's build image is fine.
+
+If you ever rename the Cloudflare project, update `name` in `wrangler.json` to
+match — a mismatch is just a warning (Cloudflare overrides it and may open a PR
+to fix it), but keeping them in sync avoids that.
 
 Cloudflare cannot convert an *existing* direct-upload project to this in place.
 To switch without breaking a link you already gave someone: create the new
