@@ -1,4 +1,5 @@
-/* Service worker for the batch watermark tool.
+/* Author: Barzil Bruton.
+ * Service worker for the batch watermark tool.
  *
  * The point of this file is the video core: @ffmpeg/core-mt is about 32 MB and
  * lives on a CDN under a pinned version number, so it never changes and should

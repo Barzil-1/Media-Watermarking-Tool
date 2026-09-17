@@ -1,2 +1,3 @@
+# Author: Barzil Bruton
 # Serve the tool at the bare domain, keeping the source file name intact.
 /    /batch-watermark.html    200

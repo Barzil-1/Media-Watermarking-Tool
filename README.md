@@ -1,5 +1,7 @@
 # Batch Watermark
 
+**[Try it live](https://media-watermarking-tool.oumabarzil.workers.dev/)**, no install or setup required.
+
 A browser-based tool that batch-watermarks photos and videos: no install, no command line, no backend. Open a link, drop in a folder of media, download the finished set.
 
 Built for a non-technical client running a Telegram news channel who was previously watermarking every photo and video by hand, one file at a time, in separate image and video editors.
@@ -54,7 +56,7 @@ writes a `dist/` folder containing only what needs to ship. Drag that folder ont
 
 ## Limits
 
-- Videos over 400 MB are rejected at upload (the browser can't reliably handle more); over 150 MB gets a "this will take a while" warning
+- Videos over 400 MB are rejected at upload (the browser can't reliably handle more); over 150 MB shows a warning that it will take a while
 - Video processing is one file at a time, with no hard cap on how many files can be queued
 - Video encoding is CPU-bound WebAssembly, not hardware-accelerated. Expect it to be slower than a native editor, especially on a phone or an older machine
 

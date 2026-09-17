@@ -1,4 +1,5 @@
-/* Local test server. Development only - not needed on Cloudflare Pages, which
+/* Author: Barzil Bruton.
+ * Local test server. Development only - not needed on Cloudflare Pages, which
  * reads the headers from _headers instead.
  *
  *   node serve.mjs            -> http://localhost:8080

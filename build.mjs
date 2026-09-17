@@ -1,4 +1,5 @@
-/* Assembles dist/ — exactly the files the client's copy needs, nothing else.
+/* Author: Barzil Bruton.
+ * Assembles dist/: exactly the files the client's copy needs, nothing else.
  *
  *   node build.mjs
  *
@@ -54,10 +55,10 @@ for (const rel of SHIP) {
 }
 
 if (failed) {
-  console.error("\nBuild incomplete — fix the missing files above.");
+  console.error("\nBuild incomplete: fix the missing files above.");
   process.exit(1);
 }
 
-console.log(`\ndist/ ready — ${SHIP.length} files, ${(total / 1024).toFixed(0)} KB total.`);
+console.log(`\ndist/ ready: ${SHIP.length} files, ${(total / 1024).toFixed(0)} KB total.`);
 console.log("Drag the dist folder onto https://dash.cloudflare.com (Workers & Pages).");
 console.log("The 32 MB video core is NOT in here; it loads from the CDN on first use.");

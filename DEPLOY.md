@@ -9,12 +9,12 @@
 | `_redirects` | Serves the tool at the bare domain. |
 | `manifest.webmanifest`, `icon-192.png`, `icon-512.png` | Let the client install it as an app. |
 | `sw.js` | Caches the video core so the 32 MB download happens once. |
-| `vendor/ffmpeg/` | The ffmpeg.wasm loader and its worker chunk. Must be same-origin — see below. |
+| `vendor/ffmpeg/` | The ffmpeg.wasm loader and its worker chunk. Must be same-origin, see below. |
 | `serve.mjs` | Local test server with the right headers. Development only. |
-| `build.mjs` | Assembles `dist/` — the exact files to deploy. Development only. |
+| `build.mjs` | Assembles `dist/`: the exact files to deploy. Development only. |
 | `wrangler.json` | Tells Cloudflare's Git-connected deploy what to serve. Only used by Option B below. |
 
-All five support files are optional in the sense that the tool still runs without
+These support files are optional in the sense that the tool still runs without
 them. What you lose without each one is spelled out below.
 
 ## Why it can no longer be a double-clicked file
@@ -27,7 +27,7 @@ video does not, so the tool needs a real origin.
 ## Sending it to the client
 
 The client cannot be sent a zip. Opened from a file on disk the page has a null
-origin, where the video engine's worker cannot start — images would work and
+origin, where the video engine's worker cannot start: images would work and
 every video would refuse. It has to be a URL.
 
 ```
@@ -54,7 +54,7 @@ Then open <http://localhost:8080>. This sends the same COOP/COEP pair as
 ## Why `vendor/ffmpeg/` has to be same-origin
 
 `ffmpeg.js` spawns its own worker from a sibling file, `814.ffmpeg.js`, and a
-`Worker` cannot be constructed from a different origin — serving `ffmpeg.js`
+`Worker` cannot be constructed from a different origin, so serving `ffmpeg.js`
 from a CDN fails with a SecurityError. Both files are a few kilobytes, so they
 are vendored here and the page loads them from its own origin.
 
@@ -69,15 +69,15 @@ sends both `Access-Control-Allow-Origin: *` and
 `Cross-Origin-Resource-Policy: cross-origin`, which is what COEP requires.
 
 If you upgrade `@ffmpeg/ffmpeg`, re-download both files from
-`https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@<version>/dist/umd/` — the chunk
-number can change between versions.
+`https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@<version>/dist/umd/` (the chunk
+number can change between versions).
 
 ## Deploying to Cloudflare Pages
 
-Two ways to do this. They are separate project types in Cloudflare — you cannot
+Two ways to do this. They are separate project types in Cloudflare: you cannot
 switch an existing project from one to the other later, only create a new one.
 
-### Option A — direct upload (what this project started with)
+### Option A: direct upload (what this project started with)
 
 1. Sign in at <https://dash.cloudflare.com> and go to **Workers & Pages → Create → Pages → Upload assets**.
 2. Run `node build.mjs` locally, then drag the `dist/` folder in.
@@ -86,10 +86,10 @@ switch an existing project from one to the other later, only create a new one.
 To update later: run `node build.mjs` again, drag `dist/` in again, deploy again.
 Simple, but manual every time.
 
-### Option B — connected to GitHub (recommended once the repo exists)
+### Option B: connected to GitHub (recommended once the repo exists)
 
 As of late 2026, Cloudflare's Git-connected setup is a Workers-style flow, not
-the older "build output directory" field — it deploys with Wrangler, and
+the older **build output directory** field: it deploys with Wrangler, and
 Wrangler needs a config file. `wrangler.json` at the repo root already has it:
 
 ```json
@@ -105,16 +105,16 @@ Setup:
 1. **Workers & Pages → Create → Pages → Connect to Git**, pick this repo, branch
    `main`.
 2. **Build command:** `node build.mjs`. **Deploy command:** leave it as the
-   default `npx wrangler deploy` — `wrangler.json` tells it what to serve, so
+   default `npx wrangler deploy`, since `wrangler.json` tells it what to serve, so
    no `--assets` flag is needed. Same for the non-production branch deploy
-   command (`npx wrangler versions upload`). Leave **Path** blank — despite the
+   command (`npx wrangler versions upload`). Leave **Path** blank: despite the
    label, that field is a monorepo root, not the output directory.
-3. Deploy. Every `git push` to `main` now redeploys automatically — no manual
+3. Deploy. Every `git push` to `main` now redeploys automatically, no manual
    drag-and-drop step. `build.mjs` needs no `npm install`; it only touches the
    filesystem, so the default Node version in Cloudflare's build image is fine.
 
 If you ever rename the Cloudflare project, update `name` in `wrangler.json` to
-match — a mismatch is just a warning (Cloudflare overrides it and may open a PR
+match, a mismatch is just a warning (Cloudflare overrides it and may open a PR
 to fix it), but keeping them in sync avoids that.
 
 Cloudflare cannot convert an *existing* direct-upload project to this in place.
@@ -126,7 +126,7 @@ same subdomain, so any link already sent out keeps working unchanged.
 
 Netlify works identically (`https://app.netlify.com/drop`, or its Git-connected
 mode with the same build command/output settings) and reads the same
-`_headers` and `_redirects` files. **GitHub Pages will not work well here** — it
+`_headers` and `_redirects` files. **GitHub Pages will not work well here**: it
 cannot set custom response headers, so the fast video core stays unavailable.
 
 ### Check the headers landed
@@ -148,7 +148,7 @@ identical.
 > (or **⋮ → Cast, save and share → Install page as app**) and it becomes an icon
 > you can pin to the taskbar, exactly like a normal program.
 >
-> The first time you use a video it will spend a moment getting ready — that is a
+> The first time you use a video it will spend a moment getting ready, and that is a
 > one-off download. After that it works even with no internet.
 >
 > Nothing you add is ever uploaded anywhere. Every photo and video stays on your
@@ -170,7 +170,7 @@ that limit, self-hosting it is a two-line change to `FF_CORE` in the page.
 **Speed.** Encoding is the entire cost of the video feature. If clips get long
 enough that the wait becomes the complaint, the next step is a WebCodecs fast
 path (hardware encoder, 10–30× faster) behind a feature test, falling back to
-ffmpeg.wasm for anything it cannot demux. That is a contained addition — the
-engine already sits behind `renderVideo()` — but it brings its own edge cases
+ffmpeg.wasm for anything it cannot demux. That is a contained addition (the
+engine already sits behind `renderVideo()`), but it brings its own edge cases
 around rotation metadata, B-frame timestamps and AAC passthrough, which is why
 it is not in this version.
