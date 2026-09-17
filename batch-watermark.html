@@ -138,7 +138,7 @@ body.dropping .drop-cover{display:flex}
 @media (prefers-reduced-motion: reduce){.toast,.progress>div{transition:none}}
 
 /* Progress panel */
-.working{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:6;padding:20px}
+.working{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:21;padding:20px}
 .work-card{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-m);padding:22px 24px;width:min(360px,100%);text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.45)}
 .work-title{margin:0 0 12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .work-pct{font-size:36px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;margin-bottom:14px;letter-spacing:-.01em}
@@ -166,13 +166,64 @@ body.dropping .drop-cover{display:flex}
 .thumb.vid .thumb-btn::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:0;height:0;border-left:13px solid rgba(255,255,255,.94);border-top:9px solid transparent;border-bottom:9px solid transparent;filter:drop-shadow(0 1px 2px rgba(0,0,0,.65));pointer-events:none}
 .thumb-badge{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;line-height:1;padding:3px 5px;border-radius:3px;font-variant-numeric:tabular-nums;pointer-events:none}
 
+/* Mobile chrome (sheet backdrop, sheet header, bottom bar) stays hidden
+   until the phone layout below turns it on. */
+.sheet-backdrop,.mobile-bar,.panel-mobile-head,#editBtn{display:none}
+
 @media (max-width:880px){
-  body{height:auto}
-  .layout{grid-template-columns:1fr}
-  .workspace{order:-1}
-  .stage{min-height:56vh;flex:none}
-  .panel{border-right:none;border-top:1px solid var(--line);overflow:visible}
+  .layout{grid-template-columns:1fr;position:relative}
+  .workspace{order:-1;min-height:0}
+  .stage{min-height:62vh;flex:1}
   .stage-tip{display:none}
+
+  /* Settings become a bottom sheet instead of a long scrolling list, so the
+     preview stays the focus of the screen and controls are opened on demand. */
+  .panel{
+    position:fixed;left:0;right:0;bottom:0;z-index:15;
+    max-height:82vh;border-right:none;border-top:1px solid var(--line);
+    border-radius:16px 16px 0 0;box-shadow:0 -8px 32px rgba(0,0,0,.35);
+    transform:translateY(105%);transition:transform .25s ease;
+    padding:0 18px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  .panel.sheet-open{transform:translateY(0)}
+  .panel-mobile-head{
+    display:block;position:sticky;top:0;z-index:1;background:var(--panel);
+    margin:0 -18px 4px;padding:8px 18px 10px;border-bottom:1px solid var(--line);
+  }
+  .sheet-handle{display:block;width:36px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 10px}
+  .panel-mobile-title{display:flex;align-items:center;justify-content:space-between;font-weight:650}
+
+  .sheet-backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:14}
+
+  .mobile-bar{
+    position:fixed;left:0;right:0;bottom:0;z-index:12;
+    display:flex;gap:10px;padding:10px 14px;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom, 0px));
+    background:var(--panel);border-top:1px solid var(--line);
+  }
+  #editBtn{display:block;flex:1;padding:12px;font-size:15px;text-align:center}
+  /* Keep the last thumbnails from sitting underneath the fixed bottom bar. */
+  .workspace{padding-bottom:66px}
+  .strip{min-height:0}
+
+  /* Touch targets sized for a finger, not a mouse pointer. */
+  .btn{padding:11px 16px}
+  .btn.quiet{padding:9px 12px}
+  .posgrid{grid-template-columns:repeat(3,44px)}
+  .posgrid button{width:44px;height:40px}
+  .check input{width:20px;height:20px}
+  .color input{width:40px;height:40px}
+  .style-opt label{padding:12px 4px 10px}
+  .thumb{width:64px;height:64px}
+}
+
+/* Landscape phones: short viewport height needs a more compact sheet, since
+   82vh of a ~375px-tall landscape screen leaves almost nothing for the stage. */
+@media (max-width:880px) and (max-height:520px) and (orientation:landscape){
+  .stage{min-height:0}
+  .panel{max-height:94vh}
+  .mobile-bar{padding:6px 14px}
+  #editBtn{padding:9px;font-size:14px}
 }
 </style>
 </head>
@@ -196,6 +247,13 @@ body.dropping .drop-cover{display:flex}
 
 <main class="layout">
   <aside class="panel" aria-label="Watermark settings">
+    <div class="panel-mobile-head">
+      <span class="sheet-handle" aria-hidden="true"></span>
+      <div class="panel-mobile-title">
+        <span>Watermark settings</span>
+        <button class="btn quiet" id="closeSheet" type="button">Done</button>
+      </div>
+    </div>
 
     <section>
       <h2>Text</h2>
@@ -397,6 +455,11 @@ body.dropping .drop-cover{display:flex}
   </section>
 </main>
 
+<div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+<div class="mobile-bar">
+  <button class="btn primary" id="editBtn" type="button">Edit watermark</button>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
@@ -503,7 +566,8 @@ body.dropping .drop-cover{display:flex}
     working: $("#working"), workTitle: $("#workTitle"), workPct: $("#workPct"),
     workBar: $("#workBar"), workSub: $("#workSub"), workOverall: $("#workOverall"),
     workOverallText: $("#workOverallText"), workOverallBar: $("#workOverallBar"),
-    workStop: $("#workStop")
+    workStop: $("#workStop"), panel: $(".panel"), sheetBackdrop: $("#sheetBackdrop"),
+    editBtn: $("#editBtn"), closeSheet: $("#closeSheet")
   };
 
   /* ---------- Text helpers ---------- */
@@ -1220,7 +1284,19 @@ body.dropping .drop-cover{display:flex}
     pumpSeek(it);
   });
 
+  /* Settings sheet, mobile only. The panel and its CSS stay the same
+     element on every screen size; this just toggles whether it is pinned
+     open (desktop) or slid up on demand (phone, via the mobile media query). */
+  function setSheetOpen(open) {
+    els.panel.classList.toggle("sheet-open", open);
+    els.sheetBackdrop.hidden = !open;
+  }
+  els.editBtn.addEventListener("click", () => setSheetOpen(true));
+  els.closeSheet.addEventListener("click", () => setSheetOpen(false));
+  els.sheetBackdrop.addEventListener("click", () => setSheetOpen(false));
+
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && els.panel.classList.contains("sheet-open")) { setSheetOpen(false); return; }
     const tag = (document.activeElement && document.activeElement.tagName) || "";
     if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
     if (e.key === "ArrowLeft") select(current - 1);
