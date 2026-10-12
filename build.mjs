@@ -1,21 +1,32 @@
 /* Author: Barzil Bruton.
- * Assembles dist/: exactly the files the client's copy needs, nothing else.
+ * Assembles dist/: exactly the files the deployed site needs, nothing else.
  *
  *   node build.mjs
  *
- * Then drag dist/ onto Cloudflare Pages (or Netlify Drop). Development files
- * like serve.mjs and DEPLOY.md are deliberately left out, so nothing internal
- * ends up publicly readable.
+ * Cloudflare runs this on every push to main and serves dist/. Development
+ * files such as serve.mjs and DEPLOY.md are left out, so nothing internal is
+ * publicly readable.
+ *
+ * The build fails, and ships nothing, if any of these checks fail:
+ *   1. src/shared/engine.js points at the vendored ffmpeg loader.
+ *   2. The page's module entry point is part of the build.
+ *   3. Every relative import in a shipped module resolves to a shipped file.
+ *   4. sw.js contains the APP_SHELL marker that receives the precache list.
  */
 import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname ?? ".");
 const DIST = path.join(ROOT, "dist");
+const ENTRY_PAGE = "batch-watermark.html";
+const ENGINE = "src/shared/engine.js";
+const SHELL_MARKER = "const APP_SHELL = [];";
 
-// Allowlist, not a denylist: a new stray file in the folder can never leak.
-const SHIP = [
-  "batch-watermark.html",
+/* Allowlist, not a denylist: a stray file in the folder can never leak.
+   SHIP_FILES are copied as listed. SHIP_DIRS are copied recursively, keeping
+   only files with the given extensions. */
+const SHIP_FILES = [
+  ENTRY_PAGE,
   "_headers",
   "_redirects",
   "manifest.webmanifest",
@@ -25,40 +36,95 @@ const SHIP = [
   "vendor/ffmpeg/ffmpeg.js",
   "vendor/ffmpeg/814.ffmpeg.js"
 ];
+const SHIP_DIRS = [
+  { dir: "src", ext: [".js"] }
+];
 
-let failed = false;
+/* Files Cloudflare reads as configuration rather than serves. They are
+   shipped but never precached. */
+const NOT_SERVED = new Set(["_headers", "_redirects", "sw.js"]);
 
-// Guard against shipping a build that cannot load its own video engine.
-const page = fs.readFileSync(path.join(ROOT, "batch-watermark.html"), "utf8");
-if (!page.includes('FF_MAIN = "vendor/ffmpeg/ffmpeg.js"')) {
-  console.error("! batch-watermark.html does not point at the vendored ffmpeg loader.");
-  console.error("  Videos will fail with a cross-origin Worker error. Not building.");
+const rel = (p) => path.relative(ROOT, p).split(path.sep).join("/");
+const fail = (lines) => {
+  for (const l of lines) console.error(l);
+  console.error("\nBuild stopped. Nothing was written to dist/.");
   process.exit(1);
+};
+
+function walk(dir, ext) {
+  const out = [];
+  if (!fs.existsSync(dir)) return out;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...walk(p, ext));
+    else if (ext.includes(path.extname(e.name))) out.push(rel(p));
+  }
+  return out;
 }
+
+const ship = [...SHIP_FILES];
+for (const { dir, ext } of SHIP_DIRS) ship.push(...walk(path.join(ROOT, dir), ext).sort());
+const shipped = new Set(ship);
+
+const missing = ship.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+if (missing.length) fail(missing.map((f) => `! missing: ${f}`));
+
+/* Check 1: the engine must load ffmpeg.js from this origin, or every video
+   export fails with a cross-origin Worker error. */
+const engineSrc = fs.readFileSync(path.join(ROOT, ENGINE), "utf8");
+if (!engineSrc.includes('FF_MAIN = "vendor/ffmpeg/ffmpeg.js"')) {
+  fail([`! ${ENGINE} does not point at the vendored ffmpeg loader.`,
+    "  Videos would fail with a cross-origin Worker error."]);
+}
+
+/* Check 2: the page's module entry point is shipped. */
+const page = fs.readFileSync(path.join(ROOT, ENTRY_PAGE), "utf8");
+const entries = [...page.matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"/g)].map((m) => m[1]);
+if (!entries.length) fail([`! ${ENTRY_PAGE} has no <script type="module" src="..."> entry point.`]);
+const badEntries = entries.filter((e) => !shipped.has(e));
+if (badEntries.length) fail(badEntries.map((e) => `! ${ENTRY_PAGE} loads ${e}, which is not in the build.`));
+
+/* Check 3: every relative import in a shipped module resolves to a shipped
+   file. A module left out of the build only fails at load time in the
+   browser, so it is caught here instead. */
+const IMPORT_RE = /(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)|import\s*["']([^"']+)["']/g;
+const unresolved = [];
+for (const f of ship.filter((x) => x.endsWith(".js") && x.startsWith("src/"))) {
+  const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+  for (const m of src.matchAll(IMPORT_RE)) {
+    const spec = m[1] || m[2] || m[3];
+    if (!spec.startsWith(".")) continue;
+    const target = rel(path.resolve(path.dirname(path.join(ROOT, f)), spec));
+    if (!shipped.has(target)) unresolved.push(`! ${f} imports ${spec}, which is not in the build.`);
+  }
+}
+if (unresolved.length) fail(unresolved);
+
+/* Check 4: the service worker receives the precache list. */
+const swSrc = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
+if (!swSrc.includes(SHELL_MARKER)) fail([`! sw.js is missing the line: ${SHELL_MARKER}`]);
 
 fs.rmSync(DIST, { recursive: true, force: true });
 
 let total = 0;
-for (const rel of SHIP) {
-  const from = path.join(ROOT, rel);
-  const to = path.join(DIST, rel);
-  if (!fs.existsSync(from)) {
-    console.error(`! missing: ${rel}`);
-    failed = true;
-    continue;
-  }
+for (const f of ship) {
+  const to = path.join(DIST, f);
   fs.mkdirSync(path.dirname(to), { recursive: true });
-  fs.copyFileSync(from, to);
+  fs.copyFileSync(path.join(ROOT, f), to);
   const size = fs.statSync(to).size;
   total += size;
-  console.log(`  ${String(Math.ceil(size / 1024)).padStart(5)} KB  ${rel}`);
+  console.log(`  ${String(Math.ceil(size / 1024)).padStart(5)} KB  ${f}`);
 }
 
-if (failed) {
-  console.error("\nBuild incomplete: fix the missing files above.");
-  process.exit(1);
-}
+/* The precache list is generated from the ship list, so a new module or
+   asset is cached for offline use without editing sw.js. "./" is the root
+   URL, which _redirects serves as the entry page. */
+const shell = ["./", ...ship.filter((f) => !NOT_SERVED.has(f))];
+fs.writeFileSync(
+  path.join(DIST, "sw.js"),
+  swSrc.replace(SHELL_MARKER, `const APP_SHELL = ${JSON.stringify(shell)};`)
+);
 
-console.log(`\ndist/ ready: ${SHIP.length} files, ${(total / 1024).toFixed(0)} KB total.`);
-console.log("Drag the dist folder onto https://dash.cloudflare.com (Workers & Pages).");
-console.log("The 32 MB video core is NOT in here; it loads from the CDN on first use.");
+console.log(`\ndist/ ready: ${ship.length} files, ${(total / 1024).toFixed(0)} KB total, ${shell.length} precached.`);
+console.log("Push to main and Cloudflare builds and deploys it.");
+console.log("The 32 MB video core is not in here; it loads from the CDN on first use.");
