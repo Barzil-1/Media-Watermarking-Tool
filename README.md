@@ -47,6 +47,8 @@ node serve.mjs
 
 Then open <http://localhost:8080>.
 
+The page has to be served. Opening `batch-watermark.html` straight from disk does not work, because browsers do not load ES modules from a file. To use the tool with no setup at all, open the [live link](https://media-watermarking-tool.oumabarzil.workers.dev/).
+
 ## Deploying
 
 ```bash
