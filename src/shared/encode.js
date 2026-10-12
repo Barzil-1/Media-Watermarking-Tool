@@ -28,8 +28,9 @@ export function inputNameFor(file) {
    canCopyAudio:  try copying the audio stream first, then re-encode to AAC.
    onProgress(f): called with a fraction that only ever moves forward.
    ticketRef:     the job ticket; after a cancel, the killed engine is left alone.
-   tag:           log prefix, for example "[watermark] clip.mp4". */
-export async function encodeMp4({ files, args, duration, canCopyAudio, onProgress, ticketRef, tag }) {
+   tag:           log prefix, for example "[watermark] clip.mp4".
+   timeoutMs:     cap for each encode attempt, ENCODE_TIMEOUT_MS by default. */
+export async function encodeMp4({ files, args, duration, canCopyAudio, onProgress, ticketRef, tag, timeoutMs = ENCODE_TIMEOUT_MS }) {
   const engine = await ensureEngine();
   const dur = duration || 0;
   /* ffmpeg.wasm's own "progress" event is documented as accurate only when
@@ -65,7 +66,7 @@ export async function encodeMp4({ files, args, duration, canCopyAudio, onProgres
     bestFrac = 0; // Each exec() is a fresh encode from t=0, including a retry.
     let code;
     try {
-      code = await withTimeout(engine.exec(fullArgs), ENCODE_TIMEOUT_MS, "the video encode");
+      code = await withTimeout(engine.exec(fullArgs), timeoutMs, "the video encode");
     } catch (e) {
       killEngine();
       throw e;

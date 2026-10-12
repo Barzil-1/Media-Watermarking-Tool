@@ -7,7 +7,13 @@
 
 import { BRAND } from "./brand.js";
 import { drawPost, coverCrop } from "./render.js";
-import { encodeMp4, canCopyAudioFrom, inputNameFor } from "../shared/encode.js";
+import { encodeMp4, canCopyAudioFrom, inputNameFor, ENCODE_TIMEOUT_MS } from "../shared/encode.js";
+
+/* A post video is encoded at the full post size, which takes roughly three
+   to five times the clip length here. The time cap therefore grows with the
+   clip, so a long clip is not stopped while it is still making progress. */
+const SECONDS_PER_CLIP_SECOND = 8;
+const timeoutFor = (duration) => Math.max(ENCODE_TIMEOUT_MS, (duration || 0) * SECONDS_PER_CLIP_SECOND * 1000);
 
 /* Filter graph for the video panel at rectangle r of a W x H post.
    1. The video is scaled to cover the panel at the panel's zoom
@@ -64,6 +70,7 @@ export async function renderPostVideo({ W, H, state, opts, index, onProgress, ti
     canCopyAudio: canCopyAudioFrom(panel.file),
     onProgress,
     ticketRef,
-    tag: `[post] ${panel.name}`
+    tag: `[post] ${panel.name}`,
+    timeoutMs: timeoutFor(panel.duration)
   });
 }
