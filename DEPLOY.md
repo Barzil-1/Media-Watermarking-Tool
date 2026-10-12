@@ -5,7 +5,7 @@
 | File | What it is |
 | --- | --- |
 | `batch-watermark.html` | The page: markup and CSS. Loads `src/main.js` as an ES module. |
-| `src/` | The app as ES modules. `shared/` serves every mode, `watermark/` is the watermark mode, `post/` is reserved for Post maker. No bundler: the files are served as they are. |
+| `src/` | The app as ES modules. `shared/` serves every mode, `watermark/` is the watermark mode, `post/` is Post maker. No bundler: the files are served as they are. |
 | `_headers` | COOP/COEP headers. Not needed by the current single-threaded video core; kept for a possible return to the multi-threaded one. |
 | `_redirects` | Serves the tool at the bare domain. |
 | `manifest.webmanifest`, `icon-192.png`, `icon-512.png` | Let the client install it as an app. |
@@ -186,7 +186,7 @@ produces byte-identical files to running it on a page without the headers.
 `src/shared/engine.js` therefore always loads the single-threaded core. To
 try the multi-threaded one again: load `core-mt` and its
 `ffmpeg-core.worker.js` when `crossOriginIsolated` is true, pass `-threads` in
-`src/watermark/export.js`, and test a real export on desktop Chrome, Safari
+the encode arguments (`src/watermark/export.js` and `src/post/video.js`), and test a real export on desktop Chrome, Safari
 and a phone before shipping it.
 
 ## What to tell the client
