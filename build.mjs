@@ -11,16 +11,18 @@
  *   1. src/shared/engine.js points at the vendored ffmpeg loader.
  *   2. The page's module entry point is part of the build.
  *   3. Every relative import in a shipped module resolves to a shipped file.
- *   4. sw.js contains the APP_SHELL marker that receives the precache list.
+ *   4. sw.js contains the CACHE and APP_SHELL markers the build fills in.
  */
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const ROOT = path.resolve(import.meta.dirname ?? ".");
 const DIST = path.join(ROOT, "dist");
 const ENTRY_PAGE = "batch-watermark.html";
 const ENGINE = "src/shared/engine.js";
 const SHELL_MARKER = "const APP_SHELL = [];";
+const CACHE_MARKER = 'const CACHE = "watermark-dev";';
 
 /* Allowlist, not a denylist: a stray file in the folder can never leak.
    SHIP_FILES are copied as listed. SHIP_DIRS are copied recursively, keeping
@@ -100,9 +102,11 @@ for (const f of ship.filter((x) => x.endsWith(".js") && x.startsWith("src/"))) {
 }
 if (unresolved.length) fail(unresolved);
 
-/* Check 4: the service worker receives the precache list. */
+/* Check 4: the service worker receives the cache name and precache list. */
 const swSrc = fs.readFileSync(path.join(ROOT, "sw.js"), "utf8");
-if (!swSrc.includes(SHELL_MARKER)) fail([`! sw.js is missing the line: ${SHELL_MARKER}`]);
+for (const marker of [CACHE_MARKER, SHELL_MARKER]) {
+  if (!swSrc.includes(marker)) fail([`! sw.js is missing the line: ${marker}`]);
+}
 
 fs.rmSync(DIST, { recursive: true, force: true });
 
@@ -118,13 +122,22 @@ for (const f of ship) {
 
 /* The precache list is generated from the ship list, so a new module or
    asset is cached for offline use without editing sw.js. "./" is the root
-   URL, which _redirects serves as the entry page. */
+   URL, which _redirects serves as the entry page.
+
+   The cache name is a hash of every shipped file. Any change to the app
+   therefore changes sw.js, the browser installs the new worker, and the new
+   deploy is cached as a complete set while the previous one is discarded. */
 const shell = ["./", ...ship.filter((f) => !NOT_SERVED.has(f))];
+const hash = crypto.createHash("sha256");
+for (const f of ship) if (f !== "sw.js") hash.update(f + "\0").update(fs.readFileSync(path.join(ROOT, f)));
+const version = hash.digest("hex").slice(0, 12);
 fs.writeFileSync(
   path.join(DIST, "sw.js"),
-  swSrc.replace(SHELL_MARKER, `const APP_SHELL = ${JSON.stringify(shell)};`)
+  swSrc
+    .replace(CACHE_MARKER, `const CACHE = "watermark-${version}";`)
+    .replace(SHELL_MARKER, `const APP_SHELL = ${JSON.stringify(shell)};`)
 );
 
-console.log(`\ndist/ ready: ${ship.length} files, ${(total / 1024).toFixed(0)} KB total, ${shell.length} precached.`);
+console.log(`\ndist/ ready: ${ship.length} files, ${(total / 1024).toFixed(0)} KB total, ${shell.length} precached as watermark-${version}.`);
 console.log("Push to main and Cloudflare builds and deploys it.");
 console.log("The 32 MB video core is not in here; it loads from the CDN on first use.");

@@ -60,16 +60,28 @@ Then open <http://localhost:8080>. This sends the same COOP/COEP pair as
 2. The module entry point in `batch-watermark.html` is part of the build.
 3. Every relative import in a shipped module resolves to a shipped file. A
    module left out of the build would otherwise only fail in the browser.
-4. `sw.js` contains `const APP_SHELL = [];`, which the build replaces with the
-   list of shipped files to precache.
+4. `sw.js` contains `const CACHE = "watermark-dev";` and `const APP_SHELL = [];`.
+   The build replaces them with a cache name derived from a hash of every
+   shipped file, and with the list of shipped files to precache.
 
 Files are shipped from an allowlist in `build.mjs`: single files by name, and
 whole directories (currently `src/`) filtered by extension. A new module under
 `src/` is shipped and precached with no further edits.
 
-`sw.js` serves the page and modules network first, falling back to the cache
-offline. Stale-while-revalidate is avoided on purpose: with the app split
-across several files it could pair a fresh module with a stale one.
+How `sw.js` serves the app:
+
+- **Page loads are network first with a 3-second fallback.** If the network has
+  not answered within 3 seconds and a cached copy exists, the cached copy is
+  used, so a slow connection still opens quickly. Offline, the cache is used
+  straight away.
+- **Modules follow their page.** A page served from cache loads all its
+  modules from cache; a page served from the network loads them from the
+  network. Taking some from each could pair a new module with an old one.
+- **The cache is always one complete deploy.** Because the cache name is a
+  content hash, every deploy installs a full fresh copy and the previous one is
+  deleted. Network responses for the app files are not written into it.
+- **CDN files** (ffmpeg core, JSZip, Google Fonts) are cache first: their URLs
+  are pinned versions that never change.
 
 ## Why `vendor/ffmpeg/` has to be same-origin
 
