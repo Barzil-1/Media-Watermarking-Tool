@@ -230,7 +230,7 @@ export function failMessage(it, err) {
     return `${it.name} took too long to convert and was stopped. Try a shorter clip, a smaller resolution (see Video size), or turn off the moving watermark.`;
   }
   return it.kind === "video"
-    ? `${it.name} could not be converted. It may use a video format the browser cannot read — save it as an MP4 and try again.`
+    ? `${it.name} could not be converted. It may use a video format the browser cannot read. Save it as an MP4 and try again.`
     : `${it.name} could not be saved. It may be too large for the browser.`;
 }
 
