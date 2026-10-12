@@ -191,9 +191,23 @@ body.dropping .drop-cover{display:flex}
 .sheet-backdrop,.mobile-bar,.panel-mobile-head,#editBtn{display:none}
 
 @media (max-width:880px){
-  .layout{grid-template-columns:1fr;position:relative}
-  .workspace{order:-1;min-height:0}
-  .stage{min-height:62vh;flex:1}
+  /* The top bar takes two rows: the name and the mode switch, then the
+     current mode's actions. */
+  .bar{padding:10px 14px;gap:10px 12px}
+  .bar-start{width:100%;justify-content:space-between;gap:8px 12px}
+  .brand h1{font-size:20px}
+  .brand svg{width:26px;height:26px}
+  .mode-switch button{padding:6px 11px;font-size:13px}
+  .bar-actions{width:100%}
+  .bar-actions .count{margin-right:auto}
+
+  /* The page grows with its content instead of squeezing into the screen:
+     the stage fills any spare height, and when there is none the page
+     scrolls, so the strip is never cut off. */
+  html,body{height:auto}
+  .layout{grid-template-columns:1fr;position:relative;min-height:auto}
+  .workspace{order:-1}
+  .stage{min-height:45vh;flex:1}
   .stage-tip{display:none}
 
   /* Settings become a bottom sheet instead of a long scrolling list, so the
@@ -223,8 +237,8 @@ body.dropping .drop-cover{display:flex}
   }
   #editBtn{display:block;flex:1;padding:12px;font-size:15px;text-align:center}
   /* Keep the last thumbnails from sitting underneath the fixed bottom bar. */
-  .workspace{padding-bottom:66px}
-  .strip{min-height:0}
+  .workspace{padding-bottom:calc(72px + env(safe-area-inset-bottom, 0px))}
+  .strip{flex:none;min-height:0}
 
   /* Touch targets sized for a finger, not a mouse pointer. */
   .btn{padding:11px 16px}
@@ -235,12 +249,16 @@ body.dropping .drop-cover{display:flex}
   .color input{width:40px;height:40px}
   .style-opt label{padding:12px 4px 10px}
   .thumb{width:64px;height:64px}
+  /* A post has at most three thumbnails, so they can be larger, with room
+     for finger-sized move and remove buttons. */
+  .post-thumb{width:92px;height:92px}
+  .post-thumb .thumb-move,.post-thumb .thumb-x{width:26px;height:26px;line-height:26px;font-size:17px}
 }
 
 /* Landscape phones: short viewport height needs a more compact sheet, since
    82vh of a ~375px-tall landscape screen leaves almost nothing for the stage. */
 @media (max-width:880px) and (max-height:520px) and (orientation:landscape){
-  .stage{min-height:0}
+  .stage{min-height:70vh}
   .panel{max-height:94vh}
   .mobile-bar{padding:6px 14px}
   #editBtn{padding:9px;font-size:14px}
