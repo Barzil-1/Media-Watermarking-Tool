@@ -34,7 +34,8 @@ A second mode, switched from the top bar, turns a headline and up to three photo
 
 - **Four sizes**: portrait 4:5 (1080 x 1350), square (1080 x 1080), landscape 16:9 (1600 x 900) and story 9:16 (1080 x 1920), each with its own layout of logo, headline, panels and footer
 - **Headline** in the brand typeface that sizes itself to fit; words wrapped in `*stars*` turn amber, and a warning appears if the text is too long even at the smallest size
-- **Panels** with rounded corners: drag to move the picture inside, zoom with a slider, the mouse wheel or a pinch, reorder and remove. Each crop survives a change of size
+- **Panels** with rounded corners: drag to move the picture inside, zoom in or out with a slider, the mouse wheel or a pinch (out as far as the whole picture), reorder and remove. Each crop survives a change of size
+- **Style**: the dark brand background or a light one, and a choice of five headline fonts
 - **One video per post**: a post with a video exports as an MP4 the length of the clip, with its sound; without one it exports as JPG or PNG at the exact size
 - **Footer** strip with the site address or any other text, and an optional watermark using the Watermark mode's settings
 - Each mode keeps its own files and settings, so switching back and forth loses nothing
