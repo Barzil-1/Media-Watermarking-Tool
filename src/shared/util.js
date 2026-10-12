@@ -30,3 +30,11 @@ export function stamp() {
   const p = (v) => String(v).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
+
+/* Local date and time as YYYYMMDD-HHMMSS, for file names that must not repeat
+   within a minute. */
+export function stampSeconds() {
+  const d = new Date();
+  const p = (v) => String(v).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}

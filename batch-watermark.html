@@ -166,6 +166,26 @@ body.dropping .drop-cover{display:flex}
 .thumb.vid .thumb-btn::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:0;height:0;border-left:13px solid rgba(255,255,255,.94);border-top:9px solid transparent;border-bottom:9px solid transparent;filter:drop-shadow(0 1px 2px rgba(0,0,0,.65));pointer-events:none}
 .thumb-badge{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;line-height:1;padding:3px 5px;border-radius:3px;font-variant-numeric:tabular-nums;pointer-events:none}
 
+/* Mode switch */
+.bar-start{display:flex;align-items:center;gap:12px 22px;flex-wrap:wrap}
+.mode-switch{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--bg)}
+.mode-switch button{font-weight:600;border:0;background:transparent;color:var(--muted);padding:6px 14px;border-radius:999px;cursor:pointer}
+.mode-switch button:hover{color:var(--ink)}
+.mode-switch button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.mode-group{display:contents}
+.mode-pane{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+
+/* Post maker */
+#postPreview{max-width:100%;max-height:100%;display:block;box-shadow:0 2px 28px rgba(0,0,0,.45);touch-action:none;cursor:grab}
+#postPreview.dragging{cursor:grabbing}
+#postStrip:empty::before{content:"Photos for the post line up here, up to three."}
+.warn{color:var(--danger);font-size:12.5px;margin:6px 0 0}
+.thumb-moves{position:absolute;left:3px;top:3px;display:flex;gap:2px;opacity:0}
+.thumb:hover .thumb-moves,.thumb-moves:focus-within{opacity:1}
+@media (hover:none){.thumb-moves{opacity:1}}
+.thumb-move{width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:20px;padding:0;cursor:pointer}
+.thumb-move:disabled{opacity:.35;cursor:default}
+
 /* Mobile chrome (sheet backdrop, sheet header, bottom bar) stays hidden
    until the phone layout below turns it on. */
 .sheet-backdrop,.mobile-bar,.panel-mobile-head,#editBtn{display:none}
@@ -230,18 +250,32 @@ body.dropping .drop-cover{display:flex}
 <body>
 
 <header class="bar">
-  <div class="brand">
-    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 13h14M11 17h10M12.5 21h7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
-    <h1>Watermark Tool</h1>
+  <div class="bar-start">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 13h14M11 17h10M12.5 21h7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <h1>Watermark Tool</h1>
+    </div>
+    <div class="mode-switch" role="group" aria-label="Mode">
+      <button type="button" id="modeWm" aria-pressed="true">Watermark</button>
+      <button type="button" id="modePost" aria-pressed="false">Post maker</button>
+    </div>
   </div>
   <div class="bar-actions">
     <span class="job" id="job" hidden></span>
-    <span class="count" id="count">Nothing added yet</span>
-    <button class="btn" id="addBtn" type="button">Add files</button>
-    <button class="btn primary" id="dlAll" type="button" disabled>Download all</button>
+    <span class="mode-group" id="wmBar">
+      <span class="count" id="count">Nothing added yet</span>
+      <button class="btn" id="addBtn" type="button">Add files</button>
+      <button class="btn primary" id="dlAll" type="button" disabled>Download all</button>
+    </span>
+    <span class="mode-group" id="postBar" hidden>
+      <span class="count" id="postCount">No photos yet</span>
+      <button class="btn" id="postAddBtn" type="button">Add photos</button>
+      <button class="btn primary" id="postExport" type="button" disabled>Export post</button>
+    </span>
     <button class="btn danger" id="cancelBtn" type="button" hidden>Stop</button>
   </div>
   <input type="file" id="fileInput" accept="image/*,video/*" multiple class="sr" tabindex="-1" aria-hidden="true">
+  <input type="file" id="postFileInput" accept="image/*" multiple class="sr" tabindex="-1" aria-hidden="true">
 </header>
 <div class="progress" id="progress" hidden><div></div></div>
 
@@ -250,11 +284,12 @@ body.dropping .drop-cover{display:flex}
     <div class="panel-mobile-head">
       <span class="sheet-handle" aria-hidden="true"></span>
       <div class="panel-mobile-title">
-        <span>Watermark settings</span>
+        <span id="sheetTitle">Watermark settings</span>
         <button class="btn quiet" id="closeSheet" type="button">Done</button>
       </div>
     </div>
 
+    <div id="wmPanel">
     <section>
       <h2>Text</h2>
       <div class="field">
@@ -410,9 +445,68 @@ body.dropping .drop-cover{display:flex}
       <button class="btn quiet" id="resetAll" type="button">Reset all settings</button>
       <p class="hint">Your settings are remembered in this browser, so next time everything is already set up. Nothing is sent anywhere: it stays on this computer, the same as your photos and videos. Resetting also clears what's remembered.</p>
     </div>
+    </div>
+
+    <div id="postPanel" hidden>
+      <section>
+        <h2>Size</h2>
+        <div class="field">
+          <label class="field-label" for="postPreset">Post size</label>
+          <select id="postPreset"></select>
+          <p class="hint" id="postPresetHint"></p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Headline</h2>
+        <div class="field">
+          <label class="field-label" for="postHeadline">Headline</label>
+          <textarea id="postHeadline" rows="4" spellcheck="true" placeholder="Type the headline. *Starred words* turn amber."></textarea>
+          <p class="hint">Each line in this box starts a new line. Wrap words in *stars* to make them amber. The size adjusts to fit.</p>
+          <p class="warn" id="postFitWarn" role="status" hidden>Too long to fit, even at the smallest size, so the end is cut off. Shorten the headline.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Photos</h2>
+        <p class="hint">Up to three photos. Drag a photo in the preview to move it. Zoom with the slider, the mouse wheel or a pinch.</p>
+        <div class="field" id="postZoomField" hidden>
+          <label class="field-label" for="postZoom">Zoom for the selected photo <output id="postZoomOut"></output></label>
+          <input type="range" id="postZoom" min="1" max="4" step="0.01" value="1">
+        </div>
+      </section>
+
+      <section>
+        <h2>Footer</h2>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="postFooterOn"> Show the footer</label>
+        </div>
+        <div class="field" id="postFooterField">
+          <label class="field-label" for="postFooterText">Footer text</label>
+          <input type="text" id="postFooterText" maxlength="60" spellcheck="false">
+          <p class="hint">A website, handle or call to action.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Export</h2>
+        <div class="field">
+          <label class="field-label" for="postFormat">File type</label>
+          <select id="postFormat">
+            <option value="image/jpeg">JPG</option>
+            <option value="image/png">PNG</option>
+          </select>
+        </div>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="postWatermark"> Add the watermark</label>
+        </div>
+        <p class="hint">Uses the settings from Watermark mode, fixed in place.</p>
+      </section>
+    </div>
   </aside>
 
   <section class="workspace" aria-label="Files">
+    <div class="mode-pane" id="wmPane">
     <div class="stage" id="stage">
       <div class="stage-inner">
         <canvas id="preview" hidden aria-label="Watermarked preview"></canvas>
@@ -452,6 +546,23 @@ body.dropping .drop-cover{display:flex}
       </div>
     </div>
     <div class="strip" id="strip" role="list" aria-label="Uploaded files"></div>
+    </div>
+
+    <div class="mode-pane" id="postPane" hidden>
+      <div class="stage" id="postStage">
+        <div class="stage-inner">
+          <canvas id="postPreview" aria-label="Post preview"></canvas>
+        </div>
+        <div class="drop-cover">Drop photos to add them</div>
+      </div>
+      <div class="stage-bar">
+        <div class="meta" id="postMeta">&nbsp;</div>
+        <div class="stage-actions">
+          <button class="btn quiet danger" id="postClear" type="button" disabled>Remove all</button>
+        </div>
+      </div>
+      <div class="strip" id="postStrip" role="list" aria-label="Post photos"></div>
+    </div>
   </section>
 </main>
 

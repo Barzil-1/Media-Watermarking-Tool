@@ -11,6 +11,7 @@ import {
   isBusy, onBusyChange, newTicket, setBusy, startWork, workItem, workPct
 } from "../shared/progress.js";
 import { ensureEngine, engineReady } from "../shared/engine.js";
+import { getMode } from "../shared/mode.js";
 import { saveBlob, writeToFolder, dedupe, ZIP_LIMIT } from "../shared/save.js";
 import { S, persistSettings, resetSettings } from "./settings.js";
 import { ANCHORS, STYLES, ensureFont, effectivePos, drawWatermark } from "./render.js";
@@ -67,7 +68,7 @@ function renderPreview() {
 /* ---------- Files ---------- */
 let mobileVideoWarned = false;
 
-function addFiles(list) {
+export function addFiles(list) {
   const all = [...list];
   const picked = all.filter((f) => isVideoFile(f) || isImageFile(f));
   const ignored = all.length - picked.length;
@@ -575,24 +576,11 @@ export function initWatermark() {
   });
 
   document.addEventListener("keydown", (e) => {
+    if (getMode() !== "watermark") return;
     const tag = (document.activeElement && document.activeElement.tagName) || "";
     if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
     if (e.key === "ArrowLeft") select(current - 1);
     if (e.key === "ArrowRight") select(current + 1);
-  });
-
-  /* Files dropped anywhere on the page are added to the list. */
-  let dragDepth = 0;
-  const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes("Files");
-  window.addEventListener("dragenter", (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; document.body.classList.add("dropping"); });
-  window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
-  window.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove("dropping"); });
-  window.addEventListener("drop", (e) => {
-    if (!hasFiles(e)) return;
-    e.preventDefault();
-    dragDepth = 0;
-    document.body.classList.remove("dropping");
-    addFiles(e.dataTransfer.files);
   });
 
   syncControls();
