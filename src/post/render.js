@@ -199,12 +199,12 @@ function drawPanel(ctx, r, panel, radius, border, hole) {
   } else {
     ctx.fillStyle = BRAND.surface;
     ctx.fill();
-    if (panel && panel.img) {
+    if (panel && panel.media) {
       ctx.clip();
       const c = coverCrop(panel.w, panel.h, r.w, r.h, panel.crop);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(panel.img, c.sx, c.sy, c.sw, c.sh, r.x, r.y, r.w, r.h);
+      ctx.drawImage(panel.media, c.sx, c.sy, c.sw, c.sh, r.x, r.y, r.w, r.h);
     }
   }
   ctx.restore();
@@ -216,7 +216,7 @@ function drawPanel(ctx, r, panel, radius, border, hole) {
   ctx.restore();
 }
 
-/* Shown in the preview when a post has no photos yet. Never exported. */
+/* Shown in the preview when a post has nothing in it yet. Never exported. */
 function drawPlaceholder(ctx, r, radius) {
   ctx.save();
   roundRectPath(ctx, r.x, r.y, r.w, r.h, radius);
@@ -226,7 +226,7 @@ function drawPlaceholder(ctx, r, radius) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = brandFont(600, Math.round(Math.min(r.w, r.h) * 0.07));
-  ctx.fillText("Add up to three photos", r.x + r.w / 2, r.y + r.h / 2);
+  ctx.fillText("Add photos or a video", r.x + r.w / 2, r.y + r.h / 2);
   ctx.restore();
 }
 
@@ -257,7 +257,8 @@ function drawFooter(ctx, r, text) {
 /* ---------- Post ---------- */
 
 /* Paints the whole post onto ctx, in the post's own W x H pixel space.
-   state: { headline, panels: [{ img, w, h, crop }] }
+   state: { headline, panels: [{ media, w, h, crop }] }, where media is an
+          image or a video element (its current frame is drawn)
    opts:  { preset, footerOn, footerText, watermark, placeholder, hole }
    `hole` is the index of a panel to leave transparent (the video panel).
    Returns the layout used and whether the headline fit. Requires loadBrand()

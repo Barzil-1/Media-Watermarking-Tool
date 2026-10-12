@@ -1,15 +1,18 @@
 /* Author: Barzil Bruton.
- * Post maker mode: photo panels with crop, headline, footer and export.
- * Drawing lives in render.js, layouts in layouts.js. */
+ * Post maker mode: photo and video panels with crop, headline, footer and
+ * export. Drawing lives in render.js, layouts in layouts.js, the video export
+ * in video.js. */
 
 import { $, toast } from "../shared/dom.js";
-import { stampSeconds } from "../shared/util.js";
-import { isImageFile, isVideoFile } from "../shared/media.js";
-import { isBusy, onBusyChange, newTicket, setBusy, startWork, workItem } from "../shared/progress.js";
+import { stampSeconds, fmtTime, fmtMB } from "../shared/util.js";
+import { isImageFile, isVideoFile, VIDEO_WARN_BYTES, VIDEO_MAX_BYTES, MOBILE_UA, seekTo, grabThumb } from "../shared/media.js";
+import { isBusy, onBusyChange, newTicket, setBusy, startWork, workItem, workPct } from "../shared/progress.js";
+import { ensureEngine, engineReady } from "../shared/engine.js";
 import { saveBlob } from "../shared/save.js";
 import { loadBrand, ensureBrandText } from "./brand.js";
-import { PRESETS, presetById, layoutFor } from "./layouts.js";
+import { PRESETS, presetById } from "./layouts.js";
 import { drawPost, coverCrop } from "./render.js";
+import { renderPostVideo } from "./video.js";
 import { P, persistPost } from "./settings.js";
 import { ensureFont as ensureWatermarkFont } from "../watermark/render.js";
 
@@ -18,15 +21,18 @@ const MAX_ZOOM = 4;
 const PREVIEW_MAX = 1600;
 
 /* ---------- State ----------
-   Each panel: { id, file, name, url, img, w, h, crop: { zoom, cx, cy } }.
-   crop is normalized (see render.js coverCrop), so it survives a change of
-   preset or panel count. */
+   Each panel: { id, kind ("photo" or "video"), file, name, url, media, video,
+   thumb, w, h, duration, crop: { zoom, cx, cy } }. media is the drawable
+   source (the image, or the video element showing its poster frame) and is
+   set once the file has loaded. crop is normalized (see render.js coverCrop),
+   so it survives a change of preset or panel count. */
 const panels = [];
 let selected = -1;
 let headline = "";
 let nextId = 1;
 let brandReady = false;
 let lastLayout = null;
+let mobileVideoWarned = false;
 
 const preview = $("#postPreview");
 const pctx = preview.getContext("2d");
@@ -34,15 +40,18 @@ const els = {
   fileInput: $("#postFileInput"), add: $("#postAddBtn"), exportBtn: $("#postExport"),
   count: $("#postCount"), meta: $("#postMeta"), strip: $("#postStrip"), clear: $("#postClear"),
   preset: $("#postPreset"), presetHint: $("#postPresetHint"), headline: $("#postHeadline"),
-  fitWarn: $("#postFitWarn"), zoomField: $("#postZoomField"), zoom: $("#postZoom"),
-  zoomOut: $("#postZoomOut"), footerOn: $("#postFooterOn"), footerText: $("#postFooterText"),
-  footerField: $("#postFooterField"), format: $("#postFormat"), watermark: $("#postWatermark")
+  fitWarn: $("#postFitWarn"), videoWarn: $("#postVideoWarn"), zoomField: $("#postZoomField"),
+  zoom: $("#postZoom"), zoomOut: $("#postZoomOut"), footerOn: $("#postFooterOn"),
+  footerText: $("#postFooterText"), footerField: $("#postFooterField"), format: $("#postFormat"),
+  formatHint: $("#postFormatHint"), watermark: $("#postWatermark")
 };
 
 const drawOpts = (placeholder) => ({
   preset: P.preset, footerOn: P.footerOn, footerText: P.footerText,
   watermark: P.watermark, placeholder
 });
+
+const hasVideo = () => panels.some((p) => p.kind === "video");
 
 /* ---------- Preview ----------
    The preview canvas is the post scaled down, with drawPost() run in full
@@ -79,33 +88,67 @@ function renderPreview() {
 }
 
 /* ---------- Files ---------- */
+const ONE_VIDEO = "Only one video per post. The other panels can hold photos.";
+
 export function addFiles(list) {
   const all = [...list];
-  const photos = all.filter((f) => isImageFile(f) && !isVideoFile(f));
-  const videos = all.filter(isVideoFile).length;
-  const room = MAX_PANELS - panels.length;
-  if (!photos.length) {
-    toast(videos ? "Only photos can go in a post for now." : "Nothing was added. Choose JPG, PNG or WebP photos.");
+  const picked = all.filter((f) => isVideoFile(f) || isImageFile(f));
+  const ignored = all.length - picked.length;
+  if (!picked.length) {
+    toast("Nothing was added. Choose JPG, PNG or WebP photos, or an MP4 video.");
     return;
   }
+  let room = MAX_PANELS - panels.length;
   if (room <= 0) {
-    toast("A post holds up to three photos. Remove one to add another.");
+    toast("A post holds up to three panels. Remove one to add another.");
     return;
   }
-  photos.slice(0, room).forEach(addPhoto);
-  if (photos.length > room) toast(`A post holds up to three photos, so ${photos.length - room} ${photos.length - room === 1 ? "was" : "were"} not added.`);
-  else if (videos) toast("Only photos can go in a post for now, so videos were not added.");
+  let video = hasVideo();
+  let extraVideo = false;
+  let over = 0;
+  let tooBig = "";
+  let bigWarn = "";
+  let addedVideo = false;
+  for (const file of picked) {
+    const isVid = isVideoFile(file);
+    if (isVid && video) { extraVideo = true; continue; }
+    if (room <= 0) { over++; continue; }
+    if (isVid) {
+      if (file.size > VIDEO_MAX_BYTES) { tooBig = file.name; continue; }
+      if (file.size > VIDEO_WARN_BYTES) bigWarn = file.name;
+      addVideo(file);
+      video = true;
+      addedVideo = true;
+    } else {
+      addPhoto(file);
+    }
+    room--;
+  }
+  els.videoWarn.hidden = !extraVideo;
   refresh();
+  if (extraVideo) toast(ONE_VIDEO);
+  else if (tooBig) toast(`${tooBig} is too big for the browser (the limit is ${fmtMB(VIDEO_MAX_BYTES)}). Trim the video or save a smaller copy first.`);
+  else if (over) toast(`A post holds up to three panels, so ${over} ${over === 1 ? "file was" : "files were"} not added.`);
+  else if (ignored) toast(`${ignored} file${ignored > 1 ? "s were" : " was"} skipped. Only photos and videos can go in a post.`);
+  else if (addedVideo && MOBILE_UA && !mobileVideoWarned) {
+    mobileVideoWarned = true;
+    toast("Video works best on a laptop or desktop. Phones can run low on memory partway through and stop the process.");
+  } else if (bigWarn) toast(`${bigWarn} is a big video, so the post will take a while to make.`);
+}
+
+function newPanel(kind, file) {
+  const p = { id: nextId++, kind, file, name: file.name, url: URL.createObjectURL(file), media: null,
+    video: null, thumb: "", w: 0, h: 0, duration: 0, crop: { zoom: 1, cx: 0.5, cy: 0.5 } };
+  panels.push(p);
+  return p;
 }
 
 function addPhoto(file) {
-  const p = { id: nextId++, file, name: file.name, url: URL.createObjectURL(file), img: null, w: 0, h: 0,
-    crop: { zoom: 1, cx: 0.5, cy: 0.5 } };
-  panels.push(p);
+  const p = newPanel("photo", file);
   const img = new Image();
   img.decoding = "async";
   img.onload = () => {
-    p.img = img;
+    p.media = img;
     p.w = img.naturalWidth;
     p.h = img.naturalHeight;
     if (selected < 0) selected = panels.indexOf(p);
@@ -118,16 +161,61 @@ function addPhoto(file) {
   img.src = p.url;
 }
 
+/* The preview shows one still frame of the video, about a second in, the
+   same frame the watermark mode uses for its preview. */
+function addVideo(file) {
+  const p = newPanel("video", file);
+  const v = document.createElement("video");
+  p.video = v;
+  v.preload = "auto";
+  v.muted = true;
+  v.playsInline = true;
+  v.addEventListener("loadeddata", () => {
+    p.w = v.videoWidth;
+    p.h = v.videoHeight;
+    p.duration = isFinite(v.duration) ? v.duration : 0;
+    if (!p.w || !p.h) { failVideo(p); return; }
+    seekTo(p, p.duration ? Math.min(p.duration * 0.1, 1) : 0).then(() => {
+      if (!panels.includes(p)) return;
+      grabThumb(p);
+      p.media = v;
+      if (selected < 0) selected = panels.indexOf(p);
+      refresh();
+      ensureEngine().catch(() => {});
+    });
+  }, { once: true });
+  v.addEventListener("error", () => failVideo(p), { once: true });
+  v.src = p.url;
+  v.load();
+}
+
+function failVideo(p) {
+  if (!panels.includes(p)) return;
+  removePanel(p.id, true);
+  toast(`${p.name} could not be opened. Save it as an MP4 and add it again.`);
+}
+
+function disposePanel(p) {
+  if (p.video) {
+    try { p.video.pause(); } catch (e) {}
+    p.video.removeAttribute("src");
+    try { p.video.load(); } catch (e) {}
+  }
+  URL.revokeObjectURL(p.url);
+}
+
 function removePanel(id, silent) {
   const i = panels.findIndex((p) => p.id === id);
   if (i < 0) return;
-  URL.revokeObjectURL(panels[i].url);
+  const kind = panels[i].kind;
+  disposePanel(panels[i]);
   panels.splice(i, 1);
   if (!panels.length) selected = -1;
   else if (selected >= panels.length) selected = panels.length - 1;
   else if (i < selected) selected--;
+  els.videoWarn.hidden = true;
   refresh();
-  if (!silent) toast("Photo removed.");
+  if (!silent) toast(kind === "video" ? "Video removed." : "Photo removed.");
 }
 
 function movePanel(i, dir) {
@@ -140,7 +228,7 @@ function movePanel(i, dir) {
 }
 
 /* Panels that have finished loading. Only these are drawn or exported. */
-const readyPanels = () => panels.filter((p) => p.img);
+const readyPanels = () => panels.filter((p) => p.media);
 
 /* ---------- UI refresh ---------- */
 function refresh() {
@@ -154,15 +242,18 @@ function renderStrip() {
   els.strip.textContent = "";
   panels.forEach((p, i) => {
     const wrap = document.createElement("div");
-    wrap.className = "thumb post-thumb" + (i === selected ? " active" : "");
+    wrap.className = "thumb post-thumb" + (i === selected ? " active" : "") + (p.kind === "video" ? " vid" : "");
     wrap.setAttribute("role", "listitem");
     const b = document.createElement("button");
     b.type = "button";
     b.className = "thumb-btn";
-    b.setAttribute("aria-label", `Select photo ${i + 1}, ${p.name}`);
+    b.setAttribute("aria-label", `Select ${p.kind} ${i + 1}, ${p.name}`);
     if (i === selected) b.setAttribute("aria-current", "true");
     const img = document.createElement("img");
-    img.src = p.url; img.alt = ""; img.decoding = "async";
+    img.alt = "";
+    img.decoding = "async";
+    if (p.kind === "photo") img.src = p.url;
+    else if (p.thumb) img.src = p.thumb;
     b.appendChild(img);
     b.addEventListener("click", () => { selected = i; refresh(); });
     const x = document.createElement("button");
@@ -173,7 +264,7 @@ function renderStrip() {
     x.addEventListener("click", () => removePanel(p.id));
     const num = document.createElement("span");
     num.className = "thumb-badge";
-    num.textContent = String(i + 1);
+    num.textContent = p.kind === "video" && p.duration ? `${i + 1} · ${fmtTime(p.duration)}` : String(i + 1);
     const moves = document.createElement("span");
     moves.className = "thumb-moves";
     for (const [dir, label, glyph] of [[-1, "earlier", "‹"], [1, "later", "›"]]) {
@@ -181,7 +272,7 @@ function renderStrip() {
       m.type = "button";
       m.className = "thumb-move";
       m.textContent = glyph;
-      m.setAttribute("aria-label", `Move photo ${i + 1} ${label}`);
+      m.setAttribute("aria-label", `Move ${p.kind} ${i + 1} ${label}`);
       m.disabled = dir < 0 ? i === 0 : i === panels.length - 1;
       m.addEventListener("click", () => movePanel(i, dir));
       moves.appendChild(m);
@@ -193,17 +284,19 @@ function renderStrip() {
 
 function updateBar() {
   const n = readyPanels().length;
-  els.count.textContent = n ? `${n} of ${MAX_PANELS} photos` : "No photos yet";
+  const vid = panels.find((p) => p.kind === "video");
+  els.count.textContent = !n ? "Nothing added yet" : `${n} of ${MAX_PANELS} ${vid ? "panels" : "photos"}`;
   els.exportBtn.disabled = isBusy() || n === 0;
   els.clear.disabled = isBusy() || panels.length === 0;
   els.add.disabled = panels.length >= MAX_PANELS;
+  els.formatHint.hidden = !vid;
   const pr = presetById(P.preset);
-  els.meta.textContent = `${pr.label} · ${pr.W} × ${pr.H}`;
+  els.meta.textContent = `${pr.label} · ${pr.W} × ${pr.H}` + (vid && vid.duration ? ` · MP4, ${fmtTime(vid.duration)}` : "");
 }
 
 function updateZoomUI() {
   const p = panels[selected];
-  els.zoomField.hidden = !(p && p.img);
+  els.zoomField.hidden = !(p && p.media);
   if (p) {
     els.zoom.value = String(p.crop.zoom);
     els.zoomOut.textContent = `${Math.round(p.crop.zoom * 100)}%`;
@@ -234,19 +327,19 @@ function clampCrop(p, r) {
 
 function setZoom(i, z) {
   const p = panels[i];
-  if (!p || !p.img || !lastLayout) return;
+  if (!p || !p.media || !lastLayout) return;
   p.crop.zoom = Math.min(MAX_ZOOM, Math.max(1, z));
   clampCrop(p, lastLayout.panels[i]);
   updateZoomUI();
   scheduleRender();
 }
 
-/* Moves the photo with the pointer: a drag of (dx, dy) post pixels shifts the
-   visible window the opposite way in source space. */
+/* Moves the media with the pointer: a drag of (dx, dy) post pixels shifts
+   the visible window the opposite way in source space. */
 function pan(i, dx, dy) {
   const p = panels[i];
   const r = lastLayout && lastLayout.panels[i];
-  if (!p || !p.img || !r) return;
+  if (!p || !p.media || !r) return;
   clampCrop(p, r);
   const c = coverCrop(p.w, p.h, r.w, r.h, p.crop);
   p.crop.cx -= dx / (p.w * c.s);
@@ -267,7 +360,7 @@ function panelAt(pt) {
   return lastLayout.panels.findIndex((r, i) => i < panels.length && pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h);
 }
 
-/* One pointer drags the photo under it. A second pointer on the same panel
+/* One pointer drags the media under it. A second pointer on the same panel
    turns the gesture into a pinch zoom. */
 const pointers = new Map();
 let gesture = null;
@@ -275,7 +368,7 @@ let gesture = null;
 function onPointerDown(e) {
   const pt = toPost(e);
   const i = panelAt(pt);
-  if (i < 0 || !panels[i].img) return;
+  if (i < 0 || !panels[i].media) return;
   preview.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, pt);
   if (pointers.size === 1) {
@@ -314,7 +407,7 @@ function onPointerEnd(e) {
 
 function onWheel(e) {
   const i = panelAt(toPost(e));
-  if (i < 0 || !panels[i].img) return;
+  if (i < 0 || !panels[i].media) return;
   e.preventDefault();
   if (selected !== i) { selected = i; refresh(); }
   setZoom(i, panels[i].crop.zoom * Math.exp(-e.deltaY * 0.0015));
@@ -330,32 +423,61 @@ async function prepareFonts() {
   ]);
 }
 
+async function renderPhotoPost(W, H, state) {
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  drawPost(c.getContext("2d"), W, H, state, drawOpts(false));
+  const type = P.format === "image/png" ? "image/png" : "image/jpeg";
+  const blob = await new Promise((res, rej) =>
+    c.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), type, 0.92)
+  );
+  c.width = 0;
+  c.height = 0;
+  return { blob, ext: type === "image/png" ? "png" : "jpg" };
+}
+
+function videoFailMessage(err) {
+  return /timed out/.test((err && err.message) || "")
+    ? "The post video took too long to make and was stopped. Try a shorter clip."
+    : "The post video could not be made. The video may use a format the browser cannot read. Save it as an MP4 and try again.";
+}
+
 async function exportPost() {
   const ready = readyPanels();
   if (!ready.length || isBusy()) return;
-  newTicket();
+  const vi = ready.findIndex((p) => p.kind === "video");
+  const mine = newTicket();
   setBusy(true);
   startWork(1);
   try {
-    workItem(0, "Making the post");
+    if (vi >= 0) {
+      workItem(0, "Getting the video tool ready");
+      if (!(await engineReady())) return;
+      if (mine.cancelled) { toast("Stopped."); return; }
+    }
+    workItem(0, vi >= 0 ? "Making the post video" : "Making the post");
     await prepareFonts();
+    if (mine.cancelled) { toast("Stopped."); return; }
     const { W, H } = presetById(P.preset);
-    const c = document.createElement("canvas");
-    c.width = W;
-    c.height = H;
-    drawPost(c.getContext("2d"), W, H, { headline, panels: ready }, drawOpts(false));
-    const type = P.format === "image/png" ? "image/png" : "image/jpeg";
-    const blob = await new Promise((res, rej) =>
-      c.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), type, 0.92)
-    );
-    c.width = 0;
-    c.height = 0;
-    const name = `thika-post-${P.preset}-${stampSeconds()}.${type === "image/png" ? "png" : "jpg"}`;
-    saveBlob(blob, name);
+    const state = { headline, panels: ready };
+    let out;
+    if (vi >= 0) {
+      const blob = await renderPostVideo({ W, H, state, opts: drawOpts(false), index: vi, onProgress: workPct, ticketRef: mine });
+      if (mine.cancelled) { toast("Stopped."); return; }
+      out = { blob, ext: "mp4" };
+    } else {
+      out = await renderPhotoPost(W, H, state);
+    }
+    const name = `thika-post-${P.preset}-${stampSeconds()}.${out.ext}`;
+    saveBlob(out.blob, name);
     toast(`Downloaded ${name}.`);
   } catch (err) {
-    console.error("[post] export failed:", err);
-    toast("The post could not be made. Try again, or use smaller photos.");
+    if (mine.cancelled) toast("Stopped.");
+    else {
+      console.error("[post] export failed:", err);
+      toast(vi >= 0 ? videoFailMessage(err) : "The post could not be made. Try again, or use smaller photos.");
+    }
   } finally {
     setBusy(false);
   }
@@ -386,11 +508,15 @@ export function initPost() {
   els.fileInput.addEventListener("change", () => { addFiles(els.fileInput.files); els.fileInput.value = ""; });
   els.exportBtn.addEventListener("click", exportPost);
   els.clear.addEventListener("click", () => {
-    const ask = panels.length === 1 ? "Remove the photo from the post?" : `Remove all ${panels.length} photos from the post?`;
+    const vid = hasVideo();
+    const ask = panels.length === 1
+      ? `Remove the ${panels[0].kind} from the post?`
+      : `Remove all ${panels.length} ${vid ? "panels" : "photos"} from the post?`;
     if (!confirm(ask)) return;
-    panels.forEach((p) => URL.revokeObjectURL(p.url));
+    panels.forEach(disposePanel);
     panels.length = 0;
     selected = -1;
+    els.videoWarn.hidden = true;
     refresh();
   });
 

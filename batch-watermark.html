@@ -178,8 +178,8 @@ body.dropping .drop-cover{display:flex}
 /* Post maker */
 #postPreview{max-width:100%;max-height:100%;display:block;box-shadow:0 2px 28px rgba(0,0,0,.45);touch-action:none;cursor:grab}
 #postPreview.dragging{cursor:grabbing}
-#postStrip:empty::before{content:"Photos for the post line up here, up to three."}
-.warn{color:var(--danger);font-size:12.5px;margin:6px 0 0}
+#postStrip:empty::before{content:"Photos and a video for the post line up here, up to three in all."}
+.warn{color:var(--danger);font-size:12.5px;margin:6px 0 10px}
 .thumb-moves{position:absolute;left:3px;top:3px;display:flex;gap:2px;opacity:0}
 .thumb:hover .thumb-moves,.thumb-moves:focus-within{opacity:1}
 @media (hover:none){.thumb-moves{opacity:1}}
@@ -268,14 +268,14 @@ body.dropping .drop-cover{display:flex}
       <button class="btn primary" id="dlAll" type="button" disabled>Download all</button>
     </span>
     <span class="mode-group" id="postBar" hidden>
-      <span class="count" id="postCount">No photos yet</span>
-      <button class="btn" id="postAddBtn" type="button">Add photos</button>
+      <span class="count" id="postCount">Nothing added yet</span>
+      <button class="btn" id="postAddBtn" type="button">Add files</button>
       <button class="btn primary" id="postExport" type="button" disabled>Export post</button>
     </span>
     <button class="btn danger" id="cancelBtn" type="button" hidden>Stop</button>
   </div>
   <input type="file" id="fileInput" accept="image/*,video/*" multiple class="sr" tabindex="-1" aria-hidden="true">
-  <input type="file" id="postFileInput" accept="image/*" multiple class="sr" tabindex="-1" aria-hidden="true">
+  <input type="file" id="postFileInput" accept="image/*,video/*" multiple class="sr" tabindex="-1" aria-hidden="true">
 </header>
 <div class="progress" id="progress" hidden><div></div></div>
 
@@ -468,10 +468,11 @@ body.dropping .drop-cover{display:flex}
       </section>
 
       <section>
-        <h2>Photos</h2>
-        <p class="hint">Up to three photos. Drag a photo in the preview to move it. Zoom with the slider, the mouse wheel or a pinch.</p>
+        <h2>Photos and video</h2>
+        <p class="hint">Up to three panels, and one of them can be a video. Drag inside a panel in the preview to move the picture. Zoom with the slider, the mouse wheel or a pinch.</p>
+        <p class="warn" id="postVideoWarn" role="status" hidden>Only one video per post. The other panels can hold photos.</p>
         <div class="field" id="postZoomField" hidden>
-          <label class="field-label" for="postZoom">Zoom for the selected photo <output id="postZoomOut"></output></label>
+          <label class="field-label" for="postZoom">Zoom for the selected panel <output id="postZoomOut"></output></label>
           <input type="range" id="postZoom" min="1" max="4" step="0.01" value="1">
         </div>
       </section>
@@ -496,6 +497,7 @@ body.dropping .drop-cover{display:flex}
             <option value="image/jpeg">JPG</option>
             <option value="image/png">PNG</option>
           </select>
+          <p class="hint" id="postFormatHint" hidden>With a video in the post, it saves as an MP4 the length of the video, with its sound.</p>
         </div>
         <div class="checks">
           <label class="check"><input type="checkbox" id="postWatermark"> Add the watermark</label>
@@ -553,7 +555,7 @@ body.dropping .drop-cover{display:flex}
         <div class="stage-inner">
           <canvas id="postPreview" aria-label="Post preview"></canvas>
         </div>
-        <div class="drop-cover">Drop photos to add them</div>
+        <div class="drop-cover">Drop photos or a video to add them</div>
       </div>
       <div class="stage-bar">
         <div class="meta" id="postMeta">&nbsp;</div>
