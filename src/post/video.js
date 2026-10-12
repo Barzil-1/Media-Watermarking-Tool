@@ -9,7 +9,7 @@ import { BRAND } from "./brand.js";
 import { drawPost, coverCrop } from "./render.js";
 import { encodeMp4, canCopyAudioFrom, inputNameFor, ENCODE_TIMEOUT_MS } from "../shared/encode.js";
 
-/* A post video is encoded at the full post size, which takes roughly three
+/* A post video is encoded at the full post size, which takes roughly two
    to five times the clip length here. The time cap therefore grows with the
    clip, so a long clip is not stopped while it is still making progress. */
 const SECONDS_PER_CLIP_SECOND = 8;
