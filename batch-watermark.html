@@ -72,6 +72,12 @@ textarea,select,input[type=text]{width:100%;font:inherit;color:var(--ink);backgr
 textarea{resize:vertical;min-height:78px;line-height:1.4}
 input[type=range]{width:100%;accent-color:var(--accent);margin:0}
 .hint{color:var(--muted);font-size:12.5px;margin:6px 0 0}
+.label-row{display:inline-flex;align-items:center;gap:6px}
+.info{width:18px;height:18px;flex:none;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);font:600 11px/16px Georgia,"Times New Roman",serif;font-style:italic;padding:0;cursor:pointer}
+.info:hover{color:var(--ink);border-color:var(--muted)}
+.info[aria-expanded="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.tip{color:var(--muted);font-size:12.5px;margin:0 0 8px;padding:8px 10px;background:var(--bg);border-radius:var(--r-s)}
+.panel h2.label-row{display:flex}
 .checks{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:14px}
 .check{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
 .check input{accent-color:var(--accent);width:16px;height:16px;margin:0}
@@ -249,6 +255,7 @@ body.dropping .drop-cover{display:flex}
   .color input{width:40px;height:40px}
   .style-opt label{padding:12px 4px 10px}
   .thumb{width:64px;height:64px}
+  .info{width:24px;height:24px;font-size:13px;line-height:22px}
   /* A post has at most three thumbnails, so they can be larger, with room
      for finger-sized move and remove buttons. */
   .post-thumb{width:92px;height:92px}
@@ -313,7 +320,6 @@ body.dropping .drop-cover{display:flex}
       <div class="field">
         <label class="field-label" for="wmText">Watermark text</label>
         <textarea id="wmText" data-key="text" rows="3" spellcheck="false"></textarea>
-        <p class="hint">Each line in this box becomes a line in the watermark.</p>
       </div>
       <div class="checks">
         <label class="check"><input type="checkbox" data-key="uppercase"> Capital letters</label>
@@ -374,9 +380,9 @@ body.dropping .drop-cover{display:flex}
     <section>
       <h2>Size and placement</h2>
       <div class="field">
-        <label class="field-label" for="size">Size <output data-for="size"></output></label>
+        <div class="field-label"><span class="label-row"><label for="size">Size</label><button class="info" type="button" aria-expanded="false" aria-controls="tip-size" aria-label="About the size">i</button></span><output data-for="size"></output></div>
+        <p class="tip" id="tip-size" hidden>Measured against each image's shorter side, so it looks the same on every photo.</p>
         <input type="range" id="size" data-key="size" min="5" max="90" step="1">
-        <p class="hint">Measured against each image's shorter side, so it looks the same on every photo.</p>
       </div>
       <div class="field">
         <label class="field-label" for="opacity">Opacity <output data-for="opacity"></output></label>
@@ -394,7 +400,8 @@ body.dropping .drop-cover{display:flex}
       <div id="posBlock">
         <div class="pos-row">
           <div>
-            <div class="field-label" id="posLabel">Position</div>
+            <div class="field-label"><span class="label-row"><span id="posLabel">Position</span><button class="info" type="button" aria-expanded="false" aria-controls="tip-pos" aria-label="About the position">i</button></span></div>
+            <p class="tip" id="tip-pos" hidden>Pick a spot, or drag the watermark on the preview.</p>
             <div class="posgrid" id="posgrid" role="group" aria-labelledby="posLabel"></div>
           </div>
           <div class="field">
@@ -402,7 +409,6 @@ body.dropping .drop-cover{display:flex}
             <input type="range" id="margin" data-key="margin" min="0" max="20" step="0.5">
           </div>
         </div>
-        <p class="hint">Pick a spot, or drag the watermark on the preview.</p>
         <div class="checks" style="margin-top:12px">
           <label class="check"><input type="checkbox" data-key="perImage"> Position each image separately</label>
         </div>
@@ -410,7 +416,8 @@ body.dropping .drop-cover{display:flex}
       </div>
 
       <div class="field" id="motionField" hidden>
-        <label class="field-label" for="motion">Moving watermark</label>
+        <div class="field-label"><span class="label-row"><label for="motion">Moving watermark</label><button class="info" type="button" aria-expanded="false" aria-controls="tip-motion" aria-label="About the moving watermark">i</button></span></div>
+        <p class="tip" id="tip-motion" hidden>Video only. The watermark slides across the frame and off the far edge on a loop, which makes it harder to crop or paint out. Drag the preview to choose the line it travels along.</p>
         <select id="motion" data-key="motion">
           <option value="none">Off (stays in place)</option>
           <option value="top-bottom">Top to bottom</option>
@@ -418,12 +425,10 @@ body.dropping .drop-cover{display:flex}
           <option value="left-right">Left to right</option>
           <option value="right-left">Right to left</option>
         </select>
-        <p class="hint">Video only. It slides across the frame and off the far edge on a loop, which makes it harder to crop or paint out than a fixed watermark. Drag the preview to choose which line it travels along.</p>
       </div>
       <div class="field" id="motionSpeedField" hidden>
         <label class="field-label" for="motionSpeed">Speed <output data-for="motionSpeed"></output></label>
         <input type="range" id="motionSpeed" data-key="motionSpeed" min="2" max="20" step="0.5">
-        <p class="hint">Seconds for one full crossing.</p>
       </div>
     </section>
 
@@ -439,18 +444,18 @@ body.dropping .drop-cover{display:flex}
         </select>
       </div>
       <div class="field" id="qualityField">
-        <label class="field-label" for="quality">Quality <output data-for="quality"></output></label>
+        <div class="field-label"><span class="label-row"><label for="quality">Quality</label><button class="info" type="button" aria-expanded="false" aria-controls="tip-quality" aria-label="About quality">i</button></span><output data-for="quality"></output></div>
+        <p class="tip" id="tip-quality" hidden>Applies to JPG and WebP. PNG is always full quality.</p>
         <input type="range" id="quality" data-key="quality" min="50" max="100" step="1">
-        <p class="hint">Applies to JPG and WebP. PNG is always full quality.</p>
       </div>
       <div class="field" id="videoField" hidden>
-        <label class="field-label" for="videoMax">Video size</label>
+        <div class="field-label"><span class="label-row"><label for="videoMax">Video size</label><button class="info" type="button" aria-expanded="false" aria-controls="tip-videoMax" aria-label="About the video size">i</button></span></div>
+        <p class="tip" id="tip-videoMax" hidden>Videos are saved as MP4 with the sound kept. A smaller size finishes much faster, and Telegram shrinks big videos anyway.</p>
         <select id="videoMax" data-key="videoMax">
           <option value="original">Keep the original size</option>
           <option value="1920">Shrink to 1920 (Full HD)</option>
           <option value="1280">Shrink to 1280 (HD)</option>
         </select>
-        <p class="hint">Videos are always saved as MP4 with the sound kept. A smaller size finishes much faster, and Telegram shrinks big videos anyway.</p>
       </div>
       <div class="field">
         <label class="field-label" for="suffix">Add to file names</label>
@@ -460,8 +465,11 @@ body.dropping .drop-cover{display:flex}
     </section>
 
     <div class="panel-foot">
-      <button class="btn quiet" id="resetAll" type="button">Reset all settings</button>
-      <p class="hint">Your settings are remembered in this browser, so next time everything is already set up. Nothing is sent anywhere: it stays on this computer, the same as your photos and videos. Resetting also clears what's remembered.</p>
+      <div class="label-row">
+        <button class="btn quiet" id="resetAll" type="button">Reset all settings</button>
+        <button class="info" type="button" aria-expanded="false" aria-controls="tip-saved" aria-label="About saved settings">i</button>
+      </div>
+      <p class="tip" id="tip-saved" hidden>Settings are remembered in this browser only, so next time everything is already set up. Nothing is uploaded. Resetting also clears what is remembered.</p>
     </div>
     </div>
 
@@ -471,23 +479,21 @@ body.dropping .drop-cover{display:flex}
         <div class="field">
           <label class="field-label" for="postPreset">Post size</label>
           <select id="postPreset"></select>
-          <p class="hint" id="postPresetHint"></p>
         </div>
       </section>
 
       <section>
-        <h2>Headline</h2>
+        <h2 class="label-row">Headline <button class="info" type="button" aria-expanded="false" aria-controls="tip-headline" aria-label="About the headline">i</button></h2>
+        <p class="tip" id="tip-headline" hidden>Each line in the box starts a new line in the post. Wrap words in *stars* to make them amber. The size adjusts to fit.</p>
         <div class="field">
-          <label class="field-label" for="postHeadline">Headline</label>
-          <textarea id="postHeadline" rows="4" spellcheck="true" placeholder="Type the headline. *Starred words* turn amber."></textarea>
-          <p class="hint">Each line in this box starts a new line. Wrap words in *stars* to make them amber. The size adjusts to fit.</p>
+          <textarea id="postHeadline" rows="4" spellcheck="true" aria-label="Headline" placeholder="Type the headline. *Starred words* turn amber."></textarea>
           <p class="warn" id="postFitWarn" role="status" hidden>Too long to fit, even at the smallest size, so the end is cut off. Shorten the headline.</p>
         </div>
       </section>
 
       <section>
-        <h2>Photos and video</h2>
-        <p class="hint">Up to three panels, and one of them can be a video. Drag inside a panel in the preview to move the picture. Zoom with the slider, the mouse wheel or a pinch.</p>
+        <h2 class="label-row">Photos and video <button class="info" type="button" aria-expanded="false" aria-controls="tip-panels" aria-label="About photos and video">i</button></h2>
+        <p class="tip" id="tip-panels" hidden>Up to three panels, and one of them can be a video. Drag inside a panel in the preview to move the picture. Zoom with the slider, the mouse wheel or a pinch.</p>
         <p class="warn" id="postVideoWarn" role="status" hidden>Only one video per post. The other panels can hold photos.</p>
         <div class="field" id="postZoomField" hidden>
           <label class="field-label" for="postZoom">Zoom for the selected panel <output id="postZoomOut"></output></label>
@@ -503,7 +509,6 @@ body.dropping .drop-cover{display:flex}
         <div class="field" id="postFooterField">
           <label class="field-label" for="postFooterText">Footer text</label>
           <input type="text" id="postFooterText" maxlength="60" spellcheck="false">
-          <p class="hint">A website, handle or call to action.</p>
         </div>
       </section>
 
@@ -515,12 +520,12 @@ body.dropping .drop-cover{display:flex}
             <option value="image/jpeg">JPG</option>
             <option value="image/png">PNG</option>
           </select>
-          <p class="hint" id="postFormatHint" hidden>With a video in the post, it saves as an MP4 the length of the video, with its sound.</p>
+          <p class="hint" id="postFormatHint" hidden>With a video, the post saves as an MP4 with its sound.</p>
         </div>
         <div class="checks">
-          <label class="check"><input type="checkbox" id="postWatermark"> Add the watermark</label>
+          <span class="label-row"><label class="check"><input type="checkbox" id="postWatermark"> Add the watermark</label><button class="info" type="button" aria-expanded="false" aria-controls="tip-postwm" aria-label="About the watermark">i</button></span>
         </div>
-        <p class="hint">Uses the settings from Watermark mode, fixed in place.</p>
+        <p class="tip" id="tip-postwm" hidden>Uses the settings from Watermark mode, fixed in place.</p>
       </section>
     </div>
   </aside>

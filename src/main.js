@@ -9,6 +9,7 @@ import { $, shell } from "./shared/dom.js";
 import { initSheet } from "./shared/sheet.js";
 import { initJobs } from "./shared/jobs.js";
 import { initDrop } from "./shared/drop.js";
+import { initInfo } from "./shared/info.js";
 import { getMode, setMode, onModeChange } from "./shared/mode.js";
 import { initWatermark, addFiles as addWatermarkFiles } from "./watermark/index.js";
 import { initPost, activatePost, addFiles as addPostFiles } from "./post/index.js";
@@ -43,6 +44,7 @@ function showMode(mode) {
 }
 
 initSheet();
+initInfo();
 initJobs();
 initWatermark();
 initPost();

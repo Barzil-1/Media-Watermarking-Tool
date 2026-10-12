@@ -39,7 +39,7 @@ const pctx = preview.getContext("2d");
 const els = {
   fileInput: $("#postFileInput"), add: $("#postAddBtn"), exportBtn: $("#postExport"),
   count: $("#postCount"), meta: $("#postMeta"), strip: $("#postStrip"), clear: $("#postClear"),
-  preset: $("#postPreset"), presetHint: $("#postPresetHint"), headline: $("#postHeadline"),
+  preset: $("#postPreset"), headline: $("#postHeadline"),
   fitWarn: $("#postFitWarn"), videoWarn: $("#postVideoWarn"), zoomField: $("#postZoomField"),
   zoom: $("#postZoom"), zoomOut: $("#postZoomOut"), footerOn: $("#postFooterOn"),
   footerText: $("#postFooterText"), footerField: $("#postFooterField"), format: $("#postFormat"),
@@ -309,13 +309,7 @@ function syncControls() {
   els.footerText.value = P.footerText;
   els.format.value = P.format;
   els.watermark.checked = !!P.watermark;
-  updatePresetHint();
   els.footerField.hidden = !P.footerOn;
-}
-
-function updatePresetHint() {
-  const pr = presetById(P.preset);
-  els.presetHint.textContent = `${pr.W} × ${pr.H} pixels, for ${pr.platforms}.`;
 }
 
 /* ---------- Crop interaction ---------- */
@@ -487,7 +481,7 @@ async function exportPost() {
 function onSetting(key, value) {
   P[key] = value;
   persistPost();
-  if (key === "preset") { updatePresetHint(); updateBar(); }
+  if (key === "preset") updateBar();
   if (key === "footerOn") els.footerField.hidden = !value;
   if (key === "footerText") { ensureBrandText(700, value).then(scheduleRender); return; }
   if (key === "watermark" && value) { ensureWatermarkFont().then(scheduleRender); return; }
