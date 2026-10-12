@@ -35,7 +35,7 @@ Both media types share one rendering path. A single `drawWatermark()` function p
 
 Because one function produces both, the watermark is guaranteed to look identical on a photo and a video, by construction, not by careful tuning of two separate code paths.
 
-The photo tool is a single self-contained HTML file: vanilla JS, no framework, no build step. Video support layers `ffmpeg.wasm` on top, which needs the page served with cross-origin isolation (`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`) to use its fast multi-threaded core. See [`DEPLOY.md`](DEPLOY.md) for why, and what happens when those headers aren't set.
+The app is vanilla JS split into plain ES modules under `src/`, served as they are: no framework and no bundler. `build.mjs` only copies and checks files. Video support layers `ffmpeg.wasm` on top, which needs the page served with cross-origin isolation (`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`) to use its fast multi-threaded core. See [`DEPLOY.md`](DEPLOY.md) for why, and what happens when those headers aren't set.
 
 ## Try it locally
 

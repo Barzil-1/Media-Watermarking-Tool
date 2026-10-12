@@ -1,20 +1,20 @@
 /* Author: Barzil Bruton.
- * Local test server. Development only - not needed on Cloudflare Pages, which
- * reads the headers from _headers instead.
+ * Local test server, for development only. Cloudflare does not use it; it reads
+ * the headers from _headers instead.
  *
  *   node serve.mjs            -> http://localhost:8080
  *   node serve.mjs 3000       -> pick another port
  *
  * It sends the same COOP/COEP pair as _headers, so `crossOriginIsolated` is
- * true and you are testing the fast multi-threaded video core, not the slow
- * fallback. Opening the .html by double-click cannot do videos at all.
+ * true and the multi-threaded video core is the one exercised. The page loads
+ * ES modules, which browsers refuse from a file:// URL, so it must be served.
  */
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 
 const PORT = Number(process.argv[2] || 8080);
-// Optional folder to serve, so you can check the built copy: node serve.mjs 8080 dist
+// Optional folder to serve, for checking the built copy: node serve.mjs 8080 dist
 const ROOT = path.resolve(import.meta.dirname ?? ".", process.argv[3] || ".");
 
 const TYPES = {

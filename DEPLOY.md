@@ -4,31 +4,32 @@
 
 | File | What it is |
 | --- | --- |
-| `batch-watermark.html` | The whole tool. Still one file, still no build step. |
+| `batch-watermark.html` | The page: markup and CSS. Loads `src/main.js` as an ES module. |
+| `src/` | The app as ES modules. `shared/` serves every mode, `watermark/` is the watermark mode, `post/` is reserved for Post maker. No bundler: the files are served as they are. |
 | `_headers` | The COOP/COEP headers that unlock the fast video core. |
 | `_redirects` | Serves the tool at the bare domain. |
 | `manifest.webmanifest`, `icon-192.png`, `icon-512.png` | Let the client install it as an app. |
-| `sw.js` | Caches the video core so the 32 MB download happens once. |
+| `sw.js` | Precaches the app for offline use and keeps the 32 MB video core after its first download. |
 | `vendor/ffmpeg/` | The ffmpeg.wasm loader and its worker chunk. Must be same-origin, see below. |
 | `serve.mjs` | Local test server with the right headers. Development only. |
-| `build.mjs` | Assembles `dist/`: the exact files to deploy. Development only. |
+| `build.mjs` | Assembles and checks `dist/`, the exact files to deploy. See What the build checks. |
 | `wrangler.json` | Tells Cloudflare's Git-connected deploy what to serve. Only used by Option B below. |
 
-These support files are optional in the sense that the tool still runs without
-them. What you lose without each one is spelled out below.
+Apart from the page and `src/`, these support files are optional in the sense
+that the tool still runs without them. What you lose without each one is spelled out below.
 
 ## Why it can no longer be a double-clicked file
 
-Opening the HTML from the file system gives the page a null origin. Web workers
-created from blob URLs and cross-origin WebAssembly fetches are both unreliable
-there, and ffmpeg.wasm needs both. Images still work offline from a file, but
-video does not, so the tool needs a real origin.
+Opening the HTML from the file system gives the page a null origin, and browsers
+refuse to load ES modules from it. Nothing works from a file, photos included,
+so the tool needs a real origin. (Before the split into modules, photos worked
+from a file and only video needed a server: ffmpeg.wasm needs web workers from
+blob URLs and cross-origin WebAssembly fetches, both unreliable on a null origin.)
 
 ## Sending it to the client
 
-The client cannot be sent a zip. Opened from a file on disk the page has a null
-origin, where the video engine's worker cannot start: images would work and
-every video would refuse. It has to be a URL.
+The client cannot be sent a zip. Opened from a file on disk the page cannot load
+its modules at all. It has to be a URL.
 
 ```
 node build.mjs          # writes dist/
@@ -50,6 +51,25 @@ node serve.mjs 8100 dist    # the built copy
 Then open <http://localhost:8080>. This sends the same COOP/COEP pair as
 `_headers`, so you are testing the fast video core rather than the fallback.
 `sw.js` deliberately does no caching on localhost, so edits show up on reload.
+
+## What the build checks
+
+`node build.mjs` stops, and writes nothing to `dist/`, if any of these fail:
+
+1. `src/shared/engine.js` loads ffmpeg from the vendored copy (see below).
+2. The module entry point in `batch-watermark.html` is part of the build.
+3. Every relative import in a shipped module resolves to a shipped file. A
+   module left out of the build would otherwise only fail in the browser.
+4. `sw.js` contains `const APP_SHELL = [];`, which the build replaces with the
+   list of shipped files to precache.
+
+Files are shipped from an allowlist in `build.mjs`: single files by name, and
+whole directories (currently `src/`) filtered by extension. A new module under
+`src/` is shipped and precached with no further edits.
+
+`sw.js` serves the page and modules network first, falling back to the cache
+offline. Stale-while-revalidate is avoided on purpose: with the app split
+across several files it could pair a fresh module with a stale one.
 
 ## Why `vendor/ffmpeg/` has to be same-origin
 
