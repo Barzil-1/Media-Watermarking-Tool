@@ -10,8 +10,9 @@ import { isBusy, onBusyChange, newTicket, setBusy, startWork, workItem, workPct 
 import { ensureEngine, engineReady } from "../shared/engine.js";
 import { saveBlob } from "../shared/save.js";
 import { loadBrand, ensureBrandText } from "./brand.js";
-import { PRESETS, presetById } from "./layouts.js";
-import { drawPost, coverCrop } from "./render.js";
+import { PRESETS, presetById, layoutFor } from "./layouts.js";
+import { drawPost, coverCrop, minZoom } from "./render.js";
+import { HEADLINE_FONTS, ensureHeadlineFont } from "./fonts.js";
 import { renderPostVideo } from "./video.js";
 import { P, persistPost } from "./settings.js";
 import { ensureFont as ensureWatermarkFont } from "../watermark/render.js";
@@ -39,7 +40,7 @@ const pctx = preview.getContext("2d");
 const els = {
   fileInput: $("#postFileInput"), add: $("#postAddBtn"), exportBtn: $("#postExport"),
   count: $("#postCount"), meta: $("#postMeta"), strip: $("#postStrip"), clear: $("#postClear"),
-  preset: $("#postPreset"), headline: $("#postHeadline"),
+  preset: $("#postPreset"), theme: $("#postTheme"), font: $("#postFont"), headline: $("#postHeadline"),
   fitWarn: $("#postFitWarn"), videoWarn: $("#postVideoWarn"), zoomField: $("#postZoomField"),
   zoom: $("#postZoom"), zoomOut: $("#postZoomOut"), footerOn: $("#postFooterOn"),
   footerText: $("#postFooterText"), footerField: $("#postFooterField"), format: $("#postFormat"),
@@ -47,7 +48,7 @@ const els = {
 };
 
 const drawOpts = (placeholder) => ({
-  preset: P.preset, footerOn: P.footerOn, footerText: P.footerText,
+  preset: P.preset, theme: P.theme, font: P.font, footerOn: P.footerOn, footerText: P.footerText,
   watermark: P.watermark, placeholder
 });
 
@@ -294,17 +295,29 @@ function updateBar() {
   els.meta.textContent = `${pr.label} · ${pr.W} × ${pr.H}` + (vid && vid.duration ? ` · MP4, ${fmtTime(vid.duration)}` : "");
 }
 
+/* Zoom range for panel i at the current preset: from the whole picture
+   visible up to MAX_ZOOM. 100% is the picture just filling the panel. */
+function zoomFloor(i) {
+  const p = panels[i];
+  const r = layoutFor(P.preset, panels.length, !!P.footerOn).panels[i];
+  return p && p.media && r ? minZoom(p.w, p.h, r.w, r.h) : 1;
+}
+
 function updateZoomUI() {
   const p = panels[selected];
   els.zoomField.hidden = !(p && p.media);
-  if (p) {
-    els.zoom.value = String(p.crop.zoom);
-    els.zoomOut.textContent = `${Math.round(p.crop.zoom * 100)}%`;
+  if (p && p.media) {
+    const z = Math.max(zoomFloor(selected), p.crop.zoom);
+    els.zoom.min = String(Math.floor(zoomFloor(selected) * 100) / 100);
+    els.zoom.value = String(z);
+    els.zoomOut.textContent = `${Math.round(z * 100)}%`;
   }
 }
 
 function syncControls() {
   els.preset.value = P.preset;
+  els.theme.value = P.theme;
+  els.font.value = P.font;
   els.footerOn.checked = !!P.footerOn;
   els.footerText.value = P.footerText;
   els.format.value = P.format;
@@ -322,7 +335,7 @@ function clampCrop(p, r) {
 function setZoom(i, z) {
   const p = panels[i];
   if (!p || !p.media || !lastLayout) return;
-  p.crop.zoom = Math.min(MAX_ZOOM, Math.max(1, z));
+  p.crop.zoom = Math.min(MAX_ZOOM, Math.max(zoomFloor(i), z));
   clampCrop(p, lastLayout.panels[i]);
   updateZoomUI();
   scheduleRender();
@@ -411,7 +424,7 @@ function onWheel(e) {
 async function prepareFonts() {
   await loadBrand();
   await Promise.all([
-    ensureBrandText(800, headline),
+    ensureHeadlineFont(P.font, headline),
     ensureBrandText(700, P.footerText),
     P.watermark ? ensureWatermarkFont() : null
   ]);
@@ -481,7 +494,8 @@ async function exportPost() {
 function onSetting(key, value) {
   P[key] = value;
   persistPost();
-  if (key === "preset") updateBar();
+  if (key === "preset" || key === "footerOn") { updateBar(); updateZoomUI(); }
+  if (key === "font") { ensureHeadlineFont(value, headline).then(scheduleRender); return; }
   if (key === "footerOn") els.footerField.hidden = !value;
   if (key === "footerText") { ensureBrandText(700, value).then(scheduleRender); return; }
   if (key === "watermark" && value) { ensureWatermarkFont().then(scheduleRender); return; }
@@ -491,6 +505,12 @@ function onSetting(key, value) {
 export function initPost() {
   onBusyChange(updateBar);
 
+  for (const f of HEADLINE_FONTS) {
+    const o = document.createElement("option");
+    o.value = f.id;
+    o.textContent = f.label;
+    els.font.appendChild(o);
+  }
   for (const pr of PRESETS) {
     const o = document.createElement("option");
     o.value = pr.id;
@@ -516,9 +536,11 @@ export function initPost() {
 
   els.headline.addEventListener("input", () => {
     headline = els.headline.value;
-    ensureBrandText(800, headline).then(scheduleRender);
+    ensureHeadlineFont(P.font, headline).then(scheduleRender);
   });
   els.preset.addEventListener("change", () => onSetting("preset", els.preset.value));
+  els.theme.addEventListener("change", () => onSetting("theme", els.theme.value));
+  els.font.addEventListener("change", () => onSetting("font", els.font.value));
   els.footerOn.addEventListener("change", () => onSetting("footerOn", els.footerOn.checked));
   els.footerText.addEventListener("input", () => onSetting("footerText", els.footerText.value));
   els.format.addEventListener("change", () => onSetting("format", els.format.value));
@@ -541,7 +563,7 @@ export function initPost() {
 export function activatePost() {
   if (brandReady) { scheduleRender(); return; }
   loadBrand()
-    .then(() => Promise.all([ensureBrandText(800, headline), ensureBrandText(700, P.footerText), P.watermark ? ensureWatermarkFont() : null]))
+    .then(() => Promise.all([ensureHeadlineFont(P.font, headline), ensureBrandText(700, P.footerText), P.watermark ? ensureWatermarkFont() : null]))
     .then(() => { brandReady = true; renderPreview(); })
     .catch((e) => {
       console.error("[post] brand assets failed to load:", e);

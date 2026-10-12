@@ -9,7 +9,8 @@
  * loadBrand() must resolve before anything is measured or drawn, so the first
  * render and every export use Urbanist and never a fallback face. */
 
-/* Dark "night highway" palette: asphalt surfaces and one amber accent. */
+/* The brand palette, dark like a highway at night: asphalt surfaces and one
+   amber accent. */
 export const BRAND = {
   bg: "#0b0c0f",
   surface: "#14161b",
@@ -18,8 +19,28 @@ export const BRAND = {
   text: "#f3f4f6",
   muted: "#a6acb8",
   accent: "#ffb81c",
+  accentText: "#ffb81c",
   accentInk: "#14110a"
 };
+
+/* Palettes a post can be drawn in, chosen per post. Light keeps the amber
+   footer strip, but highlighted headline words use a deeper amber, since the
+   brand amber is too pale to read on a light page. */
+export const THEMES = {
+  dark: BRAND,
+  light: {
+    bg: "#f5f4f0",
+    surface: "#ffffff",
+    surface2: "#ecebe6",
+    line: "#d9d7d0",
+    text: "#14161b",
+    muted: "#5d6370",
+    accent: "#ffb81c",
+    accentText: "#b97800",
+    accentInk: "#14110a"
+  }
+};
+export const themeById = (id) => THEMES[id] || BRAND;
 
 export const FONT_FAMILY = "Urbanist";
 
@@ -149,19 +170,20 @@ export function measureLockup(ctx, H) {
   };
 }
 
-/* Draws the lockup with its top-left corner at (x, y) and height H. Requires
-   loadBrand() to have resolved. Returns the measured box. */
-export function drawLockup(ctx, x, y, H) {
+/* Draws the lockup with its top-left corner at (x, y) and height H, in the
+   palette `pal`. Requires loadBrand() to have resolved. Returns the
+   measured box. */
+export function drawLockup(ctx, x, y, H, pal = BRAND) {
   const m = measureLockup(ctx, H);
   ctx.save();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(mark, x, y, m.markW, H);
   ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = BRAND.text;
+  ctx.fillStyle = pal.text;
   ctx.font = brandFont(800, m.thikaPx);
   fillTracked(ctx, "Thika", x + m.textX, y + m.thikaBaseline, L.thikaTrack * m.thikaPx);
-  ctx.fillStyle = BRAND.muted;
+  ctx.fillStyle = pal.muted;
   ctx.font = brandFont(600, m.subPx);
   fillTracked(ctx, "SUPERHIGHWAY", x + m.textX, y + m.subBaseline, L.subTrack * m.subPx);
   ctx.restore();

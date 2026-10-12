@@ -483,6 +483,21 @@ body.dropping .drop-cover{display:flex}
       </section>
 
       <section>
+        <h2>Style</h2>
+        <div class="field">
+          <label class="field-label" for="postTheme">Background</label>
+          <select id="postTheme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="postFont">Headline font</label>
+          <select id="postFont"></select>
+        </div>
+      </section>
+
+      <section>
         <h2 class="label-row">Headline <button class="info" type="button" aria-expanded="false" aria-controls="tip-headline" aria-label="About the headline">i</button></h2>
         <p class="tip" id="tip-headline" hidden>Each line in the box starts a new line in the post. Wrap words in *stars* to make them amber. The size adjusts to fit.</p>
         <div class="field">
@@ -493,11 +508,11 @@ body.dropping .drop-cover{display:flex}
 
       <section>
         <h2 class="label-row">Photos and video <button class="info" type="button" aria-expanded="false" aria-controls="tip-panels" aria-label="About photos and video">i</button></h2>
-        <p class="tip" id="tip-panels" hidden>Up to three panels, and one of them can be a video. Drag inside a panel in the preview to move the picture. Zoom with the slider, the mouse wheel or a pinch.</p>
+        <p class="tip" id="tip-panels" hidden>Up to three panels, and one of them can be a video. Drag inside a panel in the preview to move the picture. Zoom with the slider, the mouse wheel or a pinch. Zoom below 100% to shrink the picture, down to where all of it fits.</p>
         <p class="warn" id="postVideoWarn" role="status" hidden>Only one video per post. The other panels can hold photos.</p>
         <div class="field" id="postZoomField" hidden>
           <label class="field-label" for="postZoom">Zoom for the selected panel <output id="postZoomOut"></output></label>
-          <input type="range" id="postZoom" min="1" max="4" step="0.01" value="1">
+          <input type="range" id="postZoom" min="0.2" max="4" step="0.01" value="1">
         </div>
       </section>
 

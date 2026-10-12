@@ -4,15 +4,14 @@
  * it on a full-size canvas, so line breaks, font sizes and crops in the
  * preview are computed exactly as in the exported file. */
 
-import { BRAND, brandFont, drawLockup, fitLockupHeight } from "./brand.js";
+import { brandFont, drawLockup, fitLockupHeight, themeById } from "./brand.js";
+import { headlineFontById, headlineFont } from "./fonts.js";
 import { layoutFor } from "./layouts.js";
 import { roundRectPath } from "../shared/canvas.js";
 import { drawWatermark, effectivePos } from "../watermark/render.js";
 
 /* ---------- Headline ---------- */
 
-const HEADLINE_WEIGHT = 800;
-const LINE_HEIGHT = 1.06;
 /* Font size bounds as fractions of the post's shorter side. */
 const MAX_SIZE = 0.105;
 const MIN_SIZE = 0.04;
@@ -86,17 +85,17 @@ function wrap(ctx, paragraphs, maxW) {
   return { lines, widest };
 }
 
-/* Largest whole-pixel size between the bounds at which the wrapped headline
-   fits the rectangle. If it does not fit even at the minimum, returns the
-   minimum with fits: false. */
-export function fitHeadline(ctx, paragraphs, r, W, H) {
+/* Largest whole-pixel size between the bounds at which the wrapped headline,
+   set in `font` (see fonts.js), fits the rectangle. If it does not fit even
+   at the minimum, returns the minimum with fits: false. */
+export function fitHeadline(ctx, paragraphs, r, W, H, font) {
   const base = Math.min(W, H);
   const lo0 = Math.round(base * MIN_SIZE);
   const hi0 = Math.round(base * MAX_SIZE);
   const test = (px) => {
-    ctx.font = brandFont(HEADLINE_WEIGHT, px);
+    ctx.font = headlineFont(font, px);
     const wr = wrap(ctx, paragraphs, r.w);
-    const ok = wr.widest <= r.w && wr.lines.length * px * LINE_HEIGHT <= r.h;
+    const ok = wr.widest <= r.w && wr.lines.length * px * font.lineHeight <= r.h;
     return { ok, lines: wr.lines };
   };
   if (!paragraphs.length) return { px: hi0, lines: [], fits: true };
@@ -128,15 +127,15 @@ function truncate(ctx, lines, maxW, space) {
   return out;
 }
 
-function drawHeadline(ctx, text, r, W, H) {
-  const fit = fitHeadline(ctx, parseHeadline(text), r, W, H);
+function drawHeadline(ctx, text, r, W, H, font, pal) {
+  const fit = fitHeadline(ctx, parseHeadline(text), r, W, H, font);
   if (!fit.lines.length) return fit;
   ctx.save();
-  ctx.font = brandFont(HEADLINE_WEIGHT, fit.px);
+  ctx.font = headlineFont(font, fit.px);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   const cap = ctx.measureText("H").actualBoundingBoxAscent || fit.px * 0.7;
-  const lh = fit.px * LINE_HEIGHT;
+  const lh = fit.px * font.lineHeight;
   const space = ctx.measureText(" ").width;
   let lines = fit.lines;
   let top;
@@ -161,7 +160,7 @@ function drawHeadline(ctx, text, r, W, H) {
     line.forEach((word, wi) => {
       if (wi) x += space;
       for (const p of word) {
-        ctx.fillStyle = p.amber ? BRAND.accent : BRAND.text;
+        ctx.fillStyle = p.amber ? pal.accentText : pal.text;
         ctx.fillText(p.t, x, y);
         x += ctx.measureText(p.t).width;
       }
@@ -173,56 +172,73 @@ function drawHeadline(ctx, text, r, W, H) {
 
 /* ---------- Panels ---------- */
 
-/* Cover crop of an iw x ih source into a w x h panel. `crop` holds zoom (1 is
-   plain cover) and cx, cy, the source point at the panel's center as
-   fractions of the source. The center is clamped so the source always covers
-   the whole panel. Returns the source rectangle to draw from, the scale, and
-   the clamped center. The video export uses the same numbers. */
-export function coverCrop(iw, ih, w, h, crop) {
-  const zoom = Math.max(1, crop.zoom || 1);
-  const s = Math.max(w / iw, h / ih) * zoom;
-  const sw = w / s;
-  const sh = h / s;
-  const sx = Math.min(Math.max(crop.cx * iw - sw / 2, 0), iw - sw);
-  const sy = Math.min(Math.max(crop.cy * ih - sh / 2, 0), ih - sh);
-  return { s, sx, sy, sw, sh, cx: (sx + sw / 2) / iw, cy: (sy + sh / 2) / ih };
+/* Smallest zoom for an iw x ih source in a w x h panel: the whole source
+   visible. Zoom 1 is plain cover, where the source just fills the panel. */
+export function minZoom(iw, ih, w, h) {
+  return Math.min(w / iw, h / ih) / Math.max(w / iw, h / ih);
 }
 
-function drawPanel(ctx, r, panel, radius, border, hole) {
+/* Places an iw x ih source in a w x h panel. `crop` holds zoom (1 is plain
+   cover, below 1 zooms out down to minZoom) and cx, cy, the source point at
+   the panel's center as fractions of the source. On an axis the source
+   fills, the center is clamped so no gap shows. On an axis it does not fill
+   (zoomed out), the whole source is shown, centered.
+   Returns the source rectangle (sx, sy, sw, sh), where it lands inside the
+   panel (dx, dy, dw, dh), the scale s and the clamped center. The video
+   export uses the same numbers. */
+export function coverCrop(iw, ih, w, h, crop) {
+  const zoom = Math.max(minZoom(iw, ih, w, h), crop.zoom || 1);
+  const s = Math.max(w / iw, h / ih) * zoom;
+  const axis = (n, panel, c) => {
+    const shown = panel / s;
+    if (shown >= n) {
+      const d = n * s;
+      return { src: 0, span: n, dst: (panel - d) / 2, len: d, c: 0.5 };
+    }
+    const src = Math.min(Math.max(c * n - shown / 2, 0), n - shown);
+    return { src, span: shown, dst: 0, len: panel, c: (src + shown / 2) / n };
+  };
+  const x = axis(iw, w, crop.cx);
+  const y = axis(ih, h, crop.cy);
+  return { s, sx: x.src, sy: y.src, sw: x.span, sh: y.span, dx: x.dst, dy: y.dst, dw: x.len, dh: y.len, cx: x.c, cy: y.c };
+}
+
+function drawPanel(ctx, r, panel, radius, border, hole, pal) {
   ctx.save();
   roundRectPath(ctx, r.x, r.y, r.w, r.h, radius);
   if (hole) {
     /* The video panel is left transparent so ffmpeg can lay the video
-       underneath; the opaque surroundings give it rounded corners. */
+       underneath, on a frame filled with the panel color; the opaque
+       surroundings give it rounded corners. */
     ctx.clip();
     ctx.clearRect(r.x, r.y, r.w, r.h);
   } else {
-    ctx.fillStyle = BRAND.surface;
+    ctx.fillStyle = pal.surface;
     ctx.fill();
     if (panel && panel.media) {
       ctx.clip();
       const c = coverCrop(panel.w, panel.h, r.w, r.h, panel.crop);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(panel.media, c.sx, c.sy, c.sw, c.sh, r.x, r.y, r.w, r.h);
+      ctx.drawImage(panel.media, c.sx, c.sy, c.sw, c.sh, r.x + c.dx, r.y + c.dy, c.dw, c.dh);
     }
   }
   ctx.restore();
   ctx.save();
   roundRectPath(ctx, r.x + border / 2, r.y + border / 2, r.w - border, r.h - border, Math.max(0, radius - border / 2));
   ctx.lineWidth = border;
-  ctx.strokeStyle = BRAND.line;
+  ctx.strokeStyle = pal.line;
   ctx.stroke();
   ctx.restore();
 }
 
 /* Shown in the preview when a post has nothing in it yet. Never exported. */
-function drawPlaceholder(ctx, r, radius) {
+function drawPlaceholder(ctx, r, radius, pal) {
   ctx.save();
   roundRectPath(ctx, r.x, r.y, r.w, r.h, radius);
-  ctx.fillStyle = BRAND.surface;
+  ctx.fillStyle = pal.surface;
   ctx.fill();
-  ctx.fillStyle = BRAND.muted;
+  ctx.fillStyle = pal.muted;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = brandFont(600, Math.round(Math.min(r.w, r.h) * 0.07));
@@ -232,9 +248,9 @@ function drawPlaceholder(ctx, r, radius) {
 
 /* ---------- Footer ---------- */
 
-function drawFooter(ctx, r, text) {
+function drawFooter(ctx, r, text, pal) {
   ctx.save();
-  ctx.fillStyle = BRAND.accent;
+  ctx.fillStyle = pal.accent;
   ctx.fillRect(r.x, r.y, r.w, r.h);
   if (text) {
     let px = Math.round(r.h * 0.36);
@@ -245,7 +261,7 @@ function drawFooter(ctx, r, text) {
       px = Math.max(8, Math.floor((px * maxW) / w));
       ctx.font = brandFont(700, px);
     }
-    ctx.fillStyle = BRAND.accentInk;
+    ctx.fillStyle = pal.accentInk;
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
     const cap = ctx.measureText("H").actualBoundingBoxAscent || px * 0.7;
@@ -259,27 +275,31 @@ function drawFooter(ctx, r, text) {
 /* Paints the whole post onto ctx, in the post's own W x H pixel space.
    state: { headline, panels: [{ media, w, h, crop }] }, where media is an
           image or a video element (its current frame is drawn)
-   opts:  { preset, footerOn, footerText, watermark, placeholder, hole }
-   `hole` is the index of a panel to leave transparent (the video panel).
+   opts:  { preset, theme, font, footerOn, footerText, watermark, placeholder, hole }
+   theme is a palette id (see brand.js THEMES) and font a headline font id
+   (see fonts.js). `hole` is the index of a panel to leave transparent (the
+   video panel).
    Returns the layout used and whether the headline fit. Requires loadBrand()
-   to have resolved, and the watermark font to be ready if watermark is set. */
+   to have resolved, the headline font to be loaded (fonts.js
+   ensureHeadlineFont), and the watermark font if watermark is set. */
 export function drawPost(ctx, W, H, state, opts) {
   const panels = state.panels || [];
   const L = layoutFor(opts.preset, panels.length, !!opts.footerOn);
+  const pal = themeById(opts.theme);
   ctx.save();
-  ctx.fillStyle = BRAND.bg;
+  ctx.fillStyle = pal.bg;
   ctx.fillRect(0, 0, W, H);
 
-  drawLockup(ctx, L.logo.x, L.logo.y, fitLockupHeight(ctx, L.logo.w, L.logo.h));
-  const fit = drawHeadline(ctx, state.headline, L.headline, W, H);
+  drawLockup(ctx, L.logo.x, L.logo.y, fitLockupHeight(ctx, L.logo.w, L.logo.h), pal);
+  const fit = drawHeadline(ctx, state.headline, L.headline, W, H, headlineFontById(opts.font), pal);
 
   if (!panels.length) {
-    if (opts.placeholder) drawPlaceholder(ctx, L.panels[0], L.radius);
+    if (opts.placeholder) drawPlaceholder(ctx, L.panels[0], L.radius, pal);
   } else {
-    panels.forEach((p, i) => drawPanel(ctx, L.panels[i], p, L.radius, L.border, opts.hole === i));
+    panels.forEach((p, i) => drawPanel(ctx, L.panels[i], p, L.radius, L.border, opts.hole === i, pal));
   }
 
-  if (L.footer) drawFooter(ctx, L.footer, (opts.footerText || "").trim());
+  if (L.footer) drawFooter(ctx, L.footer, (opts.footerText || "").trim(), pal);
   if (opts.watermark) drawWatermark(ctx, W, H, effectivePos(null));
   ctx.restore();
   return { layout: L, headlineFits: fit.fits };

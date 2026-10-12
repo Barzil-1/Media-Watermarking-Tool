@@ -7,6 +7,8 @@ import { loadSaved, makeSaver } from "../shared/storage.js";
 
 export const POST_DEFAULTS = {
   preset: "portrait",
+  theme: "dark",
+  font: "urbanist",
   footerOn: true,
   footerText: "thikasuperhighwayvip.com",
   format: "image/jpeg",

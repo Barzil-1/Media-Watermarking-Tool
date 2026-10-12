@@ -5,7 +5,7 @@
  * places it on the post background and lays the PNG on top, so the PNG's
  * opaque corners round the video. */
 
-import { BRAND } from "./brand.js";
+import { themeById } from "./brand.js";
 import { drawPost, coverCrop } from "./render.js";
 import { encodeMp4, canCopyAudioFrom, inputNameFor, ENCODE_TIMEOUT_MS } from "../shared/encode.js";
 
@@ -15,28 +15,32 @@ import { encodeMp4, canCopyAudioFrom, inputNameFor, ENCODE_TIMEOUT_MS } from "..
 const SECONDS_PER_CLIP_SECOND = 8;
 const timeoutFor = (duration) => Math.max(ENCODE_TIMEOUT_MS, (duration || 0) * SECONDS_PER_CLIP_SECOND * 1000);
 
-/* Filter graph for the video panel at rectangle r of a W x H post.
-   1. The video is scaled to cover the panel at the panel's zoom
-      (force_original_aspect_ratio=increase), the scale coverCrop() gives the
-      preview, then cropped to the panel at the preview's offset. The offset
-      is clamped in ffmpeg against the scaled size it actually produced.
-   2. pad places it at the panel's position on a W x H frame filled with the
-      post background. pad is used rather than a separate color source because
-      it keeps the video's own frame rate and length; a color source runs at
-      a fixed rate of its own, which the browser cannot read from the video.
-   3. The chrome PNG is overlaid on top.
-   All sizes and positions are even (see layouts.js), as libx264 requires. */
-export function postVideoFilter(W, H, r, panel) {
-  const zoom = Math.max(1, panel.crop.zoom || 1);
+/* Filter graph for the video panel at rectangle r of a W x H post, with
+   the panel color `fill` (a #rrggbb string).
+   1. The video is scaled by the factor coverCrop() gives the preview and
+      cropped to the part of it the panel shows. When it is zoomed out and
+      smaller than the panel on an axis, nothing is cut on that axis.
+   2. pad places it where the preview draws it, on a W x H frame filled with
+      the panel color, so any space around a zoomed-out video matches the
+      preview. pad is used rather than a separate color source because it
+      keeps the video's own frame rate and length; a color source runs at a
+      fixed rate of its own, which the browser cannot read from the video.
+   3. The chrome PNG is overlaid on top; its opaque corners round the panel.
+   Sizes and positions are rounded to even numbers, as libx264 requires. */
+export function postVideoFilter(W, H, r, panel, fill) {
+  const even = (v) => 2 * Math.round(v / 2);
   const c = coverCrop(panel.w, panel.h, r.w, r.h, panel.crop);
-  const tw = Math.round(r.w * zoom);
-  const th = Math.round(r.h * zoom);
+  const sw = Math.max(2, even(panel.w * c.s));
+  const sh = Math.max(2, even(panel.h * c.s));
+  const cw = Math.min(sw, r.w);
+  const ch = Math.min(sh, r.h);
   const x = Math.max(0, Math.round(c.sx * c.s));
   const y = Math.max(0, Math.round(c.sy * c.s));
-  const bg = "0x" + BRAND.bg.slice(1);
-  return `[0:v]scale=${tw}:${th}:force_original_aspect_ratio=increase:flags=bicubic,` +
-    `crop=${r.w}:${r.h}:'min(${x},iw-ow)':'min(${y},ih-oh)',setsar=1,` +
-    `pad=${W}:${H}:${r.x}:${r.y}:color=${bg}[base];` +
+  const px = r.x + even((r.w - cw) / 2);
+  const py = r.y + even((r.h - ch) / 2);
+  return `[0:v]scale=${sw}:${sh}:flags=bicubic,` +
+    `crop=${cw}:${ch}:'min(${x},iw-ow)':'min(${y},ih-oh)',setsar=1,` +
+    `pad=${W}:${H}:${px}:${py}:color=0x${fill.slice(1)}[base];` +
     `[base][1:v]overlay=0:0:format=auto,format=yuv420p[v]`;
 }
 
@@ -50,7 +54,7 @@ export async function renderPostVideo({ W, H, state, opts, index, onProgress, ti
   c.width = W;
   c.height = H;
   const info = drawPost(c.getContext("2d"), W, H, state, { ...opts, hole: index });
-  const filter = postVideoFilter(W, H, info.layout.panels[index], panel);
+  const filter = postVideoFilter(W, H, info.layout.panels[index], panel, themeById(opts.theme).surface);
   const png = await new Promise((res, rej) =>
     c.toBlob((b) => (b ? res(b) : rej(new Error("png"))), "image/png")
   );
