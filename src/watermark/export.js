@@ -4,8 +4,7 @@
 
 import { S } from "./settings.js";
 import { getLines, ensureFont, STYLES, effectivePos, rotatedBBox, motionLane, drawWatermark } from "./render.js";
-import { ensureEngine, killEngine } from "../shared/engine.js";
-import { withTimeout } from "../shared/util.js";
+import { encodeMp4, canCopyAudioFrom, inputNameFor } from "../shared/encode.js";
 
 export function outTypeFor(it) {
   if (it && it.kind === "video") return "video/mp4";
@@ -129,99 +128,30 @@ function buildMotionFilter(W, H, sw, sh, dir, period, pos) {
 }
 
 async function renderVideo(it, onProgress, ticketRef) {
-  const engine = await ensureEngine();
   const { w: W, h: H } = targetDims(it);
   const moving = S.motion !== "none" && S.style !== "tiled" && getLines().length > 0;
   const sprite = moving ? await watermarkSpritePNG(it, W, H) : null;
   const png = moving ? null : await watermarkPNG(it, W, H);
-  const m = /\.[a-z0-9]+$/i.exec(it.name);
-  const inName = "input" + (m ? m[0].toLowerCase() : ".mp4");
-  const dur = it.duration || 0;
-  /* ffmpeg.wasm's own "progress" event is documented as accurate only when
-     input and output lengths match. With a filter graph (always used here,
-     for the overlay) that often fails and the event may never report a usable
-     value. ffmpeg's own log lines ("time=00:00:04.83") are the reliable
-     source, so the "log" event is parsed as well. Either source can be stale,
-     so the bar only ever moves forward. */
-  let bestFrac = 0;
-  const report = (f) => {
-    if (!isFinite(f) || f <= bestFrac) return;
-    bestFrac = Math.min(1, f);
-    onProgress(bestFrac);
-  };
-  const onProg = (e) => {
-    const t = e && typeof e.time === "number" ? e.time / 1e6 : NaN;
-    const f = dur && isFinite(t) && t > 0 ? t / dur
-      : e && typeof e.progress === "number" ? e.progress : NaN;
-    report(f);
-  };
-  const TIME_RE = /\btime=(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/;
-  const onLog = (e) => {
-    if (!dur || !e || typeof e.message !== "string") return;
-    const m = TIME_RE.exec(e.message);
-    if (!m) return;
-    const secs = Number(m[1]) * 3600 + Number(m[2]) * 60 + parseFloat(m[3]);
-    report(secs / dur);
-  };
-  /* Each encode attempt is capped. A worker that never posts back would
-     otherwise hang the export indefinitely. On timeout the worker is killed so
-     it cannot affect the next attempt or the next file, and the audio-codec
-     retry is skipped, because a stuck video filter is not fixed by a
-     different audio codec. */
-  const ENCODE_TIMEOUT_MS = 4 * 60 * 1000;
-  const run = async (args) => {
-    bestFrac = 0; // Each exec() is a fresh encode from t=0, including a retry.
-    let code;
-    try {
-      code = await withTimeout(engine.exec(args), ENCODE_TIMEOUT_MS, "the video encode");
-    } catch (e) {
-      killEngine();
-      throw e;
-    }
-    if (typeof code === "number" && code !== 0) throw new Error("ffmpeg exit " + code);
-  };
-  engine.on("progress", onProg);
-  engine.on("log", onLog);
-  try {
-    await engine.writeFile(inName, new Uint8Array(await it.file.arrayBuffer()));
-    await engine.writeFile("wm.png", moving ? sprite.data : png);
-    const filter = moving
-      ? buildMotionFilter(W, H, sprite.w, sprite.h, S.motion, S.motionSpeed, effectivePos(it))
-      : `[0:v]scale=${W}:${H}:flags=bicubic[s];[s][1:v]overlay=0:0:format=auto,format=yuv420p[v]`;
-    const args = ["-i", inName, "-i", "wm.png", "-filter_complex", filter,
+  const inName = inputNameFor(it.file);
+  const filter = moving
+    ? buildMotionFilter(W, H, sprite.w, sprite.h, S.motion, S.motionSpeed, effectivePos(it))
+    : `[0:v]scale=${W}:${H}:flags=bicubic[s];[s][1:v]overlay=0:0:format=auto,format=yuv420p[v]`;
+  const blob = await encodeMp4({
+    files: [
+      { name: inName, data: new Uint8Array(await it.file.arrayBuffer()) },
+      { name: "wm.png", data: moving ? sprite.data : png }
+    ],
+    args: ["-i", inName, "-i", "wm.png", "-filter_complex", filter,
       "-map", "[v]", "-map", "0:a?",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-      "-movflags", "+faststart"];
-    const canCopyAudio = /mp4|quicktime|m4v/i.test(it.type || "") || /\.(mp4|m4v|mov)$/i.test(it.name);
-    let done = false;
-    let timedOut = false;
-    if (canCopyAudio) {
-      try {
-        await run([...args, "-c:a", "copy", "out.mp4"]);
-        done = true;
-      } catch (e) {
-        if (ticketRef.cancelled) throw e;
-        if (/timed out/.test(e.message || "")) timedOut = true;
-        /* The fallback re-runs the whole encode, which roughly doubles the
-           wait since video encoding is most of the cost, so it is logged. */
-        console.warn(`[watermark] ${it.name}: audio stream copy failed, re-encoding audio and running the full encode again`, e);
-      }
-    }
-    if (!done && timedOut) throw new Error("the video encode timed out");
-    if (!done) await run([...args, "-c:a", "aac", "-b:a", "128k", "out.mp4"]);
-    const data = await engine.readFile("out.mp4");
-    const blob = new Blob([data], { type: "video/mp4" });
-    if (!blob.size) throw new Error("empty output");
-    return { blob, name: `${it.name.replace(/\.[^.]+$/, "")}${cleanSuffix()}.mp4` };
-  } finally {
-    if (!ticketRef.cancelled) {
-      try { if (engine.off) engine.off("progress", onProg); } catch (e) {}
-      try { if (engine.off) engine.off("log", onLog); } catch (e) {}
-      for (const f of [inName, "wm.png", "out.mp4"]) {
-        try { await engine.deleteFile(f); } catch (e) {}
-      }
-    }
-  }
+      "-movflags", "+faststart"],
+    duration: it.duration,
+    canCopyAudio: canCopyAudioFrom(it.file),
+    onProgress,
+    ticketRef,
+    tag: `[watermark] ${it.name}`
+  });
+  return { blob, name: `${it.name.replace(/\.[^.]+$/, "")}${cleanSuffix()}.mp4` };
 }
 
 export function failMessage(it, err) {
