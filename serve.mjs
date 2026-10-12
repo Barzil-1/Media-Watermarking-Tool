@@ -29,6 +29,7 @@ const TYPES = {
   ".jpg": "image/jpeg",
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
+  ".woff2": "font/woff2",
   ".md": "text/markdown; charset=utf-8"
 };
 

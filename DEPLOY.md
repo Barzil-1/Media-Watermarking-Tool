@@ -65,8 +65,9 @@ Then open <http://localhost:8080>. This sends the same COOP/COEP pair as
    shipped file, and with the list of shipped files to precache.
 
 Files are shipped from an allowlist in `build.mjs`: single files by name, and
-whole directories (currently `src/`) filtered by extension. A new module under
-`src/` is shipped and precached with no further edits.
+whole directories filtered by extension (`src/` for modules, `assets/thika/`
+for the brand mark and fonts). A new file in either is shipped and precached
+with no further edits.
 
 How `sw.js` serves the app:
 

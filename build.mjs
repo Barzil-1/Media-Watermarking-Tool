@@ -39,7 +39,8 @@ const SHIP_FILES = [
   "vendor/ffmpeg/814.ffmpeg.js"
 ];
 const SHIP_DIRS = [
-  { dir: "src", ext: [".js"] }
+  { dir: "src", ext: [".js"] },
+  { dir: "assets/thika", ext: [".png", ".woff2"] }
 ];
 
 /* Files Cloudflare reads as configuration rather than serves. They are
