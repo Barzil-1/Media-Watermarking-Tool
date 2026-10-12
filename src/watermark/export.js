@@ -4,7 +4,7 @@
 
 import { S } from "./settings.js";
 import { getLines, ensureFont, STYLES, effectivePos, rotatedBBox, motionLane, drawWatermark } from "./render.js";
-import { ensureEngine, killEngine, isMultiThreaded } from "../shared/engine.js";
+import { ensureEngine, killEngine } from "../shared/engine.js";
 import { withTimeout } from "../shared/util.js";
 
 export function outTypeFor(it) {
@@ -192,7 +192,6 @@ async function renderVideo(it, onProgress, ticketRef) {
       "-map", "[v]", "-map", "0:a?",
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
       "-movflags", "+faststart"];
-    if (isMultiThreaded()) args.push("-threads", "4");
     const canCopyAudio = /mp4|quicktime|m4v/i.test(it.type || "") || /\.(mp4|m4v|mov)$/i.test(it.name);
     let done = false;
     let timedOut = false;

@@ -6,7 +6,7 @@
 | --- | --- |
 | `batch-watermark.html` | The page: markup and CSS. Loads `src/main.js` as an ES module. |
 | `src/` | The app as ES modules. `shared/` serves every mode, `watermark/` is the watermark mode, `post/` is reserved for Post maker. No bundler: the files are served as they are. |
-| `_headers` | The COOP/COEP headers that unlock the fast video core. |
+| `_headers` | COOP/COEP headers. Not needed by the current single-threaded video core; kept for a possible return to the multi-threaded one. |
 | `_redirects` | Serves the tool at the bare domain. |
 | `manifest.webmanifest`, `icon-192.png`, `icon-512.png` | Let the client install it as an app. |
 | `sw.js` | Precaches the app for offline use and keeps the 32 MB video core after its first download. |
@@ -49,7 +49,7 @@ node serve.mjs 8100 dist    # the built copy
 ```
 
 Then open <http://localhost:8080>. This sends the same COOP/COEP pair as
-`_headers`, so you are testing the fast video core rather than the fallback.
+`_headers`, matching the live site.
 `sw.js` deliberately does no caching on localhost, so edits show up on reload.
 
 ## What the build checks
@@ -147,20 +147,34 @@ same subdomain, so any link already sent out keeps working unchanged.
 Netlify works identically (`https://app.netlify.com/drop`, or its Git-connected
 mode with the same build command/output settings) and reads the same
 `_headers` and `_redirects` files. **GitHub Pages will not work well here**: it
-cannot set custom response headers, so the fast video core stays unavailable.
+cannot rewrite the root URL to `batch-watermark.html` or set custom headers.
 
 ### Check the headers landed
 
 Open the deployed URL, then in the browser console:
 
 ```js
-crossOriginIsolated   // must be true
+crossOriginIsolated   // true when _headers took effect
 ```
 
-If it prints `false`, the `_headers` file did not take effect. The tool still
-works, it just falls back to the single-threaded core and every video takes
-roughly two to three times longer. Nothing else changes and the output is
-identical.
+Video export does not depend on it today (see below), so `false` changes
+nothing for users. It only matters if the multi-threaded core is brought back.
+
+## Why video uses the single-threaded core
+
+ffmpeg.wasm ships two cores. The multi-threaded one (`@ffmpeg/core-mt`) needs
+SharedArrayBuffer, which needs the COOP/COEP headers, and it was the one in use
+while those headers were set. In desktop Chrome 154 it never produced a frame:
+every export sat at zero progress until the 4-minute encode timeout stopped it.
+The single-threaded core (`@ffmpeg/core`) encodes the same 10-second 576x1024
+clip in about 13 to 14 seconds. Forcing it with the headers still in place
+produces byte-identical files to running it on a page without the headers.
+
+`src/shared/engine.js` therefore always loads the single-threaded core. To
+try the multi-threaded one again: load `core-mt` and its
+`ffmpeg-core.worker.js` when `crossOriginIsolated` is true, pass `-threads` in
+`src/watermark/export.js`, and test a real export on desktop Chrome, Safari
+and a phone before shipping it.
 
 ## What to tell the client
 

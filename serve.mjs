@@ -6,7 +6,7 @@
  *   node serve.mjs 3000       -> pick another port
  *
  * It sends the same COOP/COEP pair as _headers, so `crossOriginIsolated` is
- * true and the multi-threaded video core is the one exercised. The page loads
+ * true, as on the live site. The page loads
  * ES modules, which browsers refuse from a file:// URL, so it must be served.
  */
 import http from "node:http";
@@ -69,5 +69,5 @@ http
   .listen(PORT, () => {
     console.log(`Serving ${ROOT}`);
     console.log(`  http://localhost:${PORT}`);
-    console.log("  cross-origin isolated: yes (multi-threaded video core)");
+    console.log("  cross-origin isolated: yes (same headers as _headers)");
   });

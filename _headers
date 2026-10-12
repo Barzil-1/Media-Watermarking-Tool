@@ -6,9 +6,10 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
 
-# The two Cross-Origin-* lines are what make SharedArrayBuffer available, which
-# is what lets the tool use the fast multi-threaded video core. Remove them and
-# everything still works, just roughly two to three times slower per video.
+# The two Cross-Origin-* lines make SharedArrayBuffer available. The video
+# export currently uses the single-threaded ffmpeg core, which does not need
+# them (see DEPLOY.md). They are kept for a possible return to the
+# multi-threaded core.
 #
 # They also mean every cross-origin file has to be fetched with CORS. That is
 # already handled in the page: the Google Fonts stylesheet and the JSZip script

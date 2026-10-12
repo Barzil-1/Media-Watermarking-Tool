@@ -35,7 +35,7 @@ Both media types share one rendering path. A single `drawWatermark()` function p
 
 Because one function produces both, the watermark is guaranteed to look identical on a photo and a video, by construction, not by careful tuning of two separate code paths.
 
-The app is vanilla JS split into plain ES modules under `src/`, served as they are: no framework and no bundler. `build.mjs` only copies and checks files. Video support layers `ffmpeg.wasm` on top, which needs the page served with cross-origin isolation (`Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`) to use its fast multi-threaded core. See [`DEPLOY.md`](DEPLOY.md) for why, and what happens when those headers aren't set.
+The app is vanilla JS split into plain ES modules under `src/`, served as they are: no framework and no bundler. `build.mjs` only copies and checks files. Video runs through `ffmpeg.wasm` using its single-threaded core. The multi-threaded core stalled on every export in desktop Chrome, while the single-threaded one finishes a 10-second clip in under 20 seconds. [`DEPLOY.md`](DEPLOY.md) has the details.
 
 ## Try it locally
 
@@ -53,7 +53,7 @@ Then open <http://localhost:8080>.
 node build.mjs
 ```
 
-writes a `dist/` folder containing only what needs to ship. Drag that folder onto [Cloudflare Pages](https://pages.cloudflare.com) (or any static host that lets you set response headers) and you have a URL. Full deployment notes, including why plain GitHub Pages won't work for the video path, are in [`DEPLOY.md`](DEPLOY.md).
+writes a `dist/` folder containing only what needs to ship. The live site is a Cloudflare Workers project connected to this repository: each push to `main` runs `node build.mjs` and deploys `dist/`. Full deployment notes are in [`DEPLOY.md`](DEPLOY.md).
 
 ## Limits
 

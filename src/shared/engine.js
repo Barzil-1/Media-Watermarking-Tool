@@ -1,10 +1,14 @@
 /* Author: Barzil Bruton.
  * Loads and owns the ffmpeg.wasm instance used for every video export.
  *
- * ffmpeg.wasm runs in a worker. The multi-threaded core needs
- * SharedArrayBuffer, which only exists when the page is served cross-origin
- * isolated (see _headers). Without isolation the single-threaded core is used:
- * same output, slower.
+ * ffmpeg.wasm runs in a worker. Only the single-threaded core is used. The
+ * multi-threaded core (@ffmpeg/core-mt 0.12.10) never produced a frame in
+ * desktop Chrome 154: every export stalled until the 4-minute encode timeout,
+ * while the single-threaded core encodes a 10-second 576x1024 clip in about
+ * 20 seconds. Re-enabling it means loading core-mt plus its worker file when
+ * crossOriginIsolated is true and adding "-threads" to the encode, and it must
+ * be re-tested on desktop and phone browsers first. The COOP/COEP headers in
+ * _headers stay in place for that.
  *
  * ffmpeg.js is served from this origin on purpose. It spawns its own worker
  * from a sibling file (814.ffmpeg.js), and a Worker cannot be created from
@@ -17,13 +21,10 @@ import { isBusy, setJob, workPct, workNote } from "./progress.js";
 import { withTimeout } from "./util.js";
 
 const FF_MAIN = "vendor/ffmpeg/ffmpeg.js";
-const FF_CORE = (mt) => `https://cdn.jsdelivr.net/npm/@ffmpeg/${mt ? "core-mt" : "core"}@0.12.10/dist/umd/`;
+const FF_CORE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/";
 
 let ff = null;
 let ffLoading = null;
-let ffMT = false;
-
-export const isMultiThreaded = () => ffMT;
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -69,8 +70,7 @@ export function ensureEngine() {
   ffLoading = withTimeout((async () => {
     if (!isBusy()) setJob("Getting the video tool ready…");
     if (!window.FFmpegWASM) await withTimeout(loadScript(FF_MAIN), 30000, "the video tool");
-    const mt = !!self.crossOriginIsolated;
-    const base = FF_CORE(mt);
+    const base = FF_CORE;
     /* The core is about 32 MB and downloads once. The first time, it is the
        longest wait in the tool, so its progress is reported. */
     const onBytes = (got, total) => {
@@ -89,11 +89,9 @@ export function ensureEngine() {
     };
     workNote("");
     workPct(null);
-    if (mt) opts.workerURL = await blobURL(base + "ffmpeg-core.worker.js", "text/javascript");
     const inst = new window.FFmpegWASM.FFmpeg();
     await inst.load(opts);
     ff = inst;
-    ffMT = mt;
     if (!isBusy()) setJob("");
     return ff;
   })(), 300000, "the video tool");
